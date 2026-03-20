@@ -1,5 +1,5 @@
 import { mouldApi } from './axiosInstance';
-
+//used for api endpoints
 export const mouldEndpoints = {
   // ── Mould Master ──────────────────────────────────────────────────────────
   getAll:   (params)  => mouldApi.get('/api/moulds', { params }).then(r => r.data),
