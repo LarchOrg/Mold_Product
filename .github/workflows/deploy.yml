@@ -44,4 +44,4 @@ jobs:
             docker pull ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
             docker stop MouldProduct  || true
             docker rm MouldProduct || true
-            docker run -d -p 127.0.0.1:8085:80 --name MouldProduct ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
+            docker run -d -p 127.0.0.1:8088:80 --name MouldProduct ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
