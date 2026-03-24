@@ -1,61 +1,16 @@
-name: Deploy React App
+- name: Deploy to Linux
+  uses: appleboy/ssh-action@v1
+  with:
+    host: ${{ secrets.SERVER_HOST }}
+    username: ${{ secrets.SERVER_USER }}
+    key: ${{ secrets.SERVER_SSH_KEY }}
+    script: |
+      docker pull ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
 
-on:
-  push:
-    branches:
-      - main
+      docker stop MouldProduct || true
+      docker rm MouldProduct || true
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      # 📥 Checkout
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # 🟢 Node setup
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-
-      # 📦 Install
-      - name: Install dependencies
-        run: npm ci
-
-      # 🏗️ Build
-      - name: Build app
-        run: npm run build
-
-      # 🐳 Docker login
-      - name: Docker login
-        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-      # 🏗️ Build image
-      - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest .
-
-      # 📤 Push image
-      - name: Push Docker image
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
-
-      # 🚀 Deploy (PASSWORD METHOD ✅)
-      - name: Deploy to Server
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          script: |
-            docker pull ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
-
-            docker stop MouldProduct || true
-            docker rm MouldProduct || true
-
-            docker run -d \
-              -p 127.0.0.1:8088:80 \
-              --name MouldProduct \
-              --restart unless-stopped \
-              ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
+      docker run -d -p 127.0.0.1:8088:80 \
+        --name MouldProduct \
+        --restart unless-stopped \
+        ${{ secrets.DOCKER_USERNAME }}/mouldprodfrontend:latest
