@@ -10,6 +10,7 @@ import PMPlanPage      from '@/pages/PMPlan/PMPlanPage';
 import SpecEntryPage   from '@/pages/SpecEntry/SpecEntryPage';
 import ChecksheetPage  from '@/pages/Checksheet/ChecksheetPage';
 import LifeReportPage  from '@/pages/Reports/LifeReportPage';
+import MouldHistoryPage from '@/pages/Reports/MouldHistoryPage';
 import PMHistoryPage   from '@/pages/Reports/PMHistoryPage';
 import UsersPage       from '@/pages/Users/UsersPage';
 import SettingsPage    from '@/pages/Settings/SettingsPage';
@@ -54,6 +55,7 @@ export default function AppRoutes() {
         <Route path="checksheet" element={<ChecksheetPage />} />
         <Route path="reports/life"       element={<LifeReportPage />} />
         <Route path="reports/pm-history" element={<PMHistoryPage />} />
+        <Route path="reports/mould-history" element={<MouldHistoryPage />} />
         <Route path="users"      element={<UsersPage />} />
         <Route path="settings"   element={<SettingsPage />} />
       </Route>
