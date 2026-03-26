@@ -2,14 +2,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { mouldEndpoints } from '@/api/mouldApi';
 import { useUIStore }     from '@/store/uiStore';
 
+import { getMouldDropdown } from '@/services/mouldService';
 const KEYS = {
   all:    ['moulds'],
   list:   (p) => ['moulds', 'list', p],
   detail: (id) => ['moulds', id],
+
+    dropdown: ['moulds', 'dropdown'],
 };
 
 
-
+export function useMouldDropdown() {
+  return useQuery({
+    queryKey: KEYS.dropdown,
+    queryFn: getMouldDropdown, // ✅ using service (clean)
+    staleTime: Infinity,       // optional (best for dropdown)
+  });
+}
 
 export function useMoulds(params) {
   return useQuery({

@@ -7,11 +7,14 @@ export const mouldEndpoints = {
   create:   (payload) => mouldApi.post('/api/moulds', payload).then(r => r.data),
   update:   (id, payload) => mouldApi.put(`/api/moulds/${id}`, payload).then(r => r.data),
   remove:   (id)      => mouldApi.delete(`/api/moulds/${id}`).then(r => r.data),
-
+   getDropdown: () => mouldApi.get('/api/Mold/dropdown').then(r => r.data),
+  getPMDropdown: () => mouldApi.get('/api/Mold/PMFreqdropdown').then(r => r.data),
   // ── PM Plans ──────────────────────────────────────────────────────────────
-  getPMPlans:    (params)      => mouldApi.get('/api/pm-plans', { params }).then(r => r.data),
-  createPMPlan:  (payload)     => mouldApi.post('/api/pm-plans', payload).then(r => r.data),
-  updatePMPlan:  (id, payload) => mouldApi.put(`/api/pm-plans/${id}`, payload).then(r => r.data),
+  
+  getPMPlans:    (params)      => mouldApi.get('/api/mold/pmplan', { params }).then(r => r.data),
+  getPMPlansById:  (id)      => mouldApi.get(`/api/Mold/pmschedulebyid/${id}`).then(r => r.data),
+  createPMPlan:  (payload)     => mouldApi.post('/api/Mold/pmschedule', payload).then(r => r.data),
+updatePMPlan:  (id, payload) => mouldApi.put(`/api/Mold/pmscheduleUpdate/${id}`, payload).then(r => r.data),
   deletePMPlan:  (id)          => mouldApi.delete(`/api/pm-plans/${id}`).then(r => r.data),
 
   // ── Spec Entry ────────────────────────────────────────────────────────────
