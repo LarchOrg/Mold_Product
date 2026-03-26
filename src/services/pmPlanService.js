@@ -1,5 +1,5 @@
 // ── pmPlanService.js ───────────────────────────────────────────
-import { mouldEndpoints } from '@/api/MouldApi';
+import { mouldEndpoints } from '@/api/mouldApi';
 
 const TODAY = new Date().toISOString().split('T')[0];
 
