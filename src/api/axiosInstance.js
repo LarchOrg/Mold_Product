@@ -10,14 +10,14 @@ function createApiClient(baseURL) {
   });
 
   // REQUEST — attach JWT
-  client.interceptors.request.use(
-    (config) => {
-      const token = useAuthStore.getState().token;
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
+  // client.interceptors.request.use(
+  //   (config) => {
+  //     const token = useAuthStore.getState().token;
+  //     if (token) config.headers.Authorization = `Bearer ${token}`;
+  //     return config;
+  //   },
+  //   (error) => Promise.reject(error)
+  // );
 
   // RESPONSE — handle 401 globally
   client.interceptors.response.use(
@@ -41,4 +41,4 @@ function createApiClient(baseURL) {
 
 // ── Service Clients ────────────────────────────────────────────────────────
 export const authApi  = createApiClient(import.meta.env.VITE_AUTH_API_URL  || 'http://localhost:5001');
-export const mouldApi = createApiClient(import.meta.env.VITE_MOULD_API_URL || 'http://localhost:5002');
+export const mouldApi = createApiClient(import.meta.env.VITE_MOULD_API_URL || 'https://moldapi.larcherp.com');
