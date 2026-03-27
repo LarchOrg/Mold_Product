@@ -25,7 +25,11 @@ const mapToApiPayload = (data) => {
     iCreatedBy: 3,
   };
 };
-
+const formatToSQLDate = (d) => {
+  if (!d) return '';
+  const [year, month, day] = d.split('-'); // "2026-03-27"
+  return `${day}/${month}/${year}`;          // "27/03/2026"
+};
 const formatDate = (d) => {
   if (!d) return '';
 
@@ -56,7 +60,7 @@ const mapFromApi = (item) => ({
   mould: item.mould || '',
   mouldId: item.iMouldId,
   partNo: item.partNo || '',
-  freq: item.iPMFreq === 1 ? 'Daily' : 'Monthly',
+  freq: item.pmFreq || '',
    date: formatDate(item.date), 
   status: item.status || 'Pending',
 });
@@ -84,14 +88,16 @@ export const getPMPlanById = async (id) => {
 // UPDATE
 export const updatePMPlan = async (id, data) => {
   const payload = {
-    id: id,
-     dDate: formatDate(data.date),  // only what API needs
+    Id: id,
+    dDate: formatToSQLDate(data.date),
   };
 
-  return await mouldEndpoints.updatePMPlan(id, payload);
+  return await mouldEndpoints.updatePMPlan(payload);
 };
+
+
 
 // DELETE
 export const deletePMPlan = async (id) => {
-  return await mouldEndpoints.remove(id);
+  return await mouldEndpoints.deletePMPlan(id);
 };
