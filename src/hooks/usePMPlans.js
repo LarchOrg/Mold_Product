@@ -10,7 +10,7 @@ import {
   updatePMPlan,
   deletePMPlan,
   getPMPlanById,
-  deletePMPlan,
+
 } from '@/services/pmPlanService';
 
 // ── QUERY KEYS ─────────────────────────────────────────────
@@ -128,7 +128,7 @@ export function useUpdatePMPlan() {
   });
 }
 
-// ── DELETE ───────────────────────────────────────────────
+
 // ── DELETE ───────────────────────────────────────────────
 export function useDeletePMPlan() {
   const qc = useQueryClient();
