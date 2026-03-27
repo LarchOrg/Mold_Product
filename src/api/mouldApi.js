@@ -14,8 +14,8 @@ export const mouldEndpoints = {
   getPMPlans:    (params)      => mouldApi.get('/api/mold/pmplan', { params }).then(r => r.data),
   getPMPlansById:  (id)      => mouldApi.get(`/api/Mold/pmschedulebyid/${id}`).then(r => r.data),
   createPMPlan:  (payload)     => mouldApi.post('/api/Mold/pmschedule', payload).then(r => r.data),
-updatePMPlan:  (id, payload) => mouldApi.put(`/api/Mold/pmscheduleUpdate/${id}`, payload).then(r => r.data),
-  deletePMPlan:  (id)          => mouldApi.delete(`/api/pm-plans/${id}`).then(r => r.data),
+updatePMPlan: (payload) =>  mouldApi.put(`/api/Mold/pmscheduleUpdate`, payload).then(r => r.data),
+  deletePMPlan:  (id)          => mouldApi.delete(`/api/Mold/pmplan/${id}`).then(r => r.data),
 
   // ── Spec Entry ────────────────────────────────────────────────────────────
   getSpecs:   (params)      => mouldApi.get('/api/specs', { params }).then(r => r.data),

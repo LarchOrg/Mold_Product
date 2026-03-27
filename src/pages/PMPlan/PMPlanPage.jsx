@@ -14,7 +14,8 @@ import {
   useCreatePMPlan,
   usePMPlans,
   usePMPlan, 
-  useUpdatePMPlan // ✅ ADD THIS LINE
+  useUpdatePMPlan,
+  useDeletePMPlan // ✅ ADD THIS LINE
 } from '@/hooks/usePMPlans';
 
 
@@ -38,6 +39,7 @@ export default function PMPlanPage() {
   const { data: plans = [], isLoading } = usePMPlans();
   const { data: editData } = usePMPlan(editId);
   const { mutate: updatePMPlan } = useUpdatePMPlan();
+  const { mutate: deletePMPlan } = useDeletePMPlan();
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
 
   useEffect(() => {
@@ -70,11 +72,18 @@ export default function PMPlanPage() {
     }
   };
 
-  const confirmDelete = () => {
-    setPlans(p => p.filter(x => x.id !== deleteModal.id));
-    showToast({ type:'success', title:'Deleted', message:'PM Plan deleted.' });
-    setDeleteModal(null);
-  };
+const confirmDelete = () => {
+  if (!deleteModal) return;
+
+  deletePMPlan(deleteModal.id, {
+    onSuccess: () => {
+      setDeleteModal(null); // close modal
+    },
+    onError: () => {
+      setDeleteModal(null); // close modal even if error
+    }
+  });
+};
 
 const onSubmit = data => {
   if (editId) {

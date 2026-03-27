@@ -10,6 +10,7 @@ import {
   updatePMPlan,
   deletePMPlan,
   getPMPlanById,
+  deletePMPlan,
 } from '@/services/pmPlanService';
 
 // ── QUERY KEYS ─────────────────────────────────────────────
@@ -128,28 +129,52 @@ export function useUpdatePMPlan() {
 }
 
 // ── DELETE ───────────────────────────────────────────────
+// ── DELETE ───────────────────────────────────────────────
 export function useDeletePMPlan() {
   const qc = useQueryClient();
-  const { showToast } = useUIStore();
+  const { showToast, removeToast } = useUIStore();
+  let deletingToastId = null;
 
   return useMutation({
-    mutationFn: deletePMPlan,
+    // 🔹 Ensure we correctly pass id to service
+    mutationFn: (id) => deletePMPlan(id),
 
-    onSuccess: () => {
+    onMutate: (id) => {
+      // optional: show deleting toast
+      deletingToastId = showToast({
+        type: 'info',
+        title: 'Deleting...',
+        message: `PM Plan ${id} is being deleted.`,
+        autoClose: false,
+      });
+    },
+
+    onSuccess: (_, id) => {
+      // remove deleting toast
+      if (deletingToastId) removeToast(deletingToastId);
+
+      // refresh list and/or detail
       qc.invalidateQueries(KEYS.all);
+      qc.invalidateQueries(KEYS.detail(id));
 
       showToast({
         type: 'success',
         title: 'Deleted',
-        message: 'PM Plan deleted.',
+        message: `PM Plan ${id} deleted successfully.`,
       });
     },
 
-    onError: (err) =>
+    onError: (err) => {
+      if (deletingToastId) removeToast(deletingToastId);
+
+      const message =
+        err?.response?.data?.message || err?.message || 'Something went wrong';
+
       showToast({
         type: 'error',
         title: 'Error',
-        message: err.message,
-      }),
+        message,
+      });
+    },
   });
 }
