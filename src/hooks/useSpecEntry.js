@@ -10,7 +10,7 @@ import {
 //   getSpecById,
   getImgDropdown,
   getSpecDropdowns,
-} from '@/services/specEntryService';
+} from '@/services/specentryService';
 
 // ── QUERY KEYS ─────────────────────────────────────────────
 const KEYS = {
