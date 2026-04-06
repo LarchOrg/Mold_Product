@@ -21,6 +21,13 @@ import {
 
 const S = ({ d, size=14 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">{d}</svg>;
 const STATUS_FILTERS = ['all','Pending','Completed','Overdue'];
+const freqOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'Daily', value: 'Daily' },
+  { label: 'Monthly', value: 'Monthly' },
+  { label: 'Quarterly', value: 'Quarterly' },
+  { label: 'Annually', value: 'Annually' },
+];
 const TODAY    = new Date().toISOString().split('T')[0];
 const TOMORROW = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
@@ -40,6 +47,7 @@ export default function PMPlanPage() {
   const { data: editData } = usePMPlan(editId);
   const { mutate: updatePMPlan } = useUpdatePMPlan();
   const { mutate: deletePMPlan } = useDeletePMPlan();
+  const [freqFilter, setFreqFilter] = useState('all');
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
 
   useEffect(() => {
@@ -103,10 +111,11 @@ const onSubmit = data => {
   }
 };
 
-  const displayData = statusFilter === 'all'
-    ? plans
-    : plans.filter(p => p.status === statusFilter);
-
+const displayData = plans.filter(p => {
+  const statusMatch = statusFilter === 'all' || p.status === statusFilter;
+  const freqMatch   = freqFilter === 'all' || p.freq === freqFilter;
+  return statusMatch && freqMatch;
+});
   const columns = [
     { key:'reportNo', label:'Report No', primary:true,
       render: v => (
@@ -167,7 +176,17 @@ const onSubmit = data => {
         searchKeys={['reportNo','mould','partNo']}
         pageSize={10}
         toolbar={
-          <div style={{ display:'flex', gap:6, marginLeft:'auto' }}>
+          <div style={{ display:'flex', gap:6, marginLeft:'auto', alignItems:'center' }}>
+              {/* Frequency Dropdown */}
+   <div style={{ width:220, minWidth:180 }}>
+  <SearchableSelect
+    options={freqOptions}
+    value={freqFilter}
+    onChange={setFreqFilter}
+    placeholder="Frequency"
+  />
+</div>
+     <div style={{ display:'flex', gap:6 }}>
             {STATUS_FILTERS.map(s => (
               <button key={s} onClick={() => setStatus(s)} style={{
                 padding:'4px 12px', borderRadius:20, fontSize:11, fontWeight:500, cursor:'pointer',
@@ -178,6 +197,7 @@ const onSubmit = data => {
               }}>{s==='all' ? 'All' : s}</button>
             ))}
           </div>
+             </div>
         }
       />
 
@@ -428,6 +448,7 @@ const filtered = options.filter(o =>
         onClick={handleToggle}
         style={{
           ...inputStyle,
+          background: disabled ? 'var(--bg3)' : 'var(--surface)',
           display:'flex', alignItems:'center', justifyContent:'space-between',
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
@@ -475,7 +496,7 @@ const filtered = options.filter(o =>
             : { top:'calc(100% + 4px)' }
           ),
           background:'var(--surface2)',
-          border:'1px solid var(--border2)',
+          border:'1px solid var(--border)',
           borderRadius:10,
           boxShadow:'0 8px 32px rgba(0,0,0,0.35)',
           overflow:'hidden',

@@ -39,7 +39,7 @@ export async function getpmDropdown() {
 export function mapMould(raw) {
   return {
     id:          raw.mouldId      ?? raw.id,
-    code:        raw.modelCode    ?? raw.code,
+    code:        raw.mouldCode    ?? raw.code,
     name:        raw.mouldName    ?? raw.name,
     size:        raw.mouldSize    ?? raw.size,
     cavity:      raw.cavityCount  ?? raw.cavity,
@@ -69,23 +69,35 @@ export function mapMoulds(rawList) {
 // Map UI form data → backend shape (for POST/PUT)
 export function mapMouldToPayload(formData) {
   return {
-    modelCode:    formData.code,
-    mouldName:    formData.name,
-    mouldSize:    formData.size,
-    cavityCount:  Number(formData.cavity),
-    openingShot:  Number(formData.openingShot),
-    maximumShot:  Number(formData.lifeShot),
-    location:     formData.location,
-    partNumber:   formData.partNo,
-    pmFreqDays:   Number(formData.pmDays),
-    pmFreqShots:  Number(formData.pmShots),
-    barcode:      formData.barcode,
-    mouldColor:   formData.color,
-    customer:     formData.supplier,
-    maker:        formData.maker,
-    remarks:      formData.remarks,
-    installDate:  formData.usedFrom,
-    riskCategory: formData.category,
+    code: formData.code,
+    name: formData.name,
+    size: formData.size,
+
+    cavity: Number(formData.cavity),
+    openingShot: Number(formData.openingShot),
+    lifeShot: Number(formData.lifeShot),
+    currentShot: Number(formData.currentShot || formData.openingShot || 0),
+
+    location: formData.location,
+    item: Number(formData.partNo || 0),
+
+    usedFrom: formData.usedFrom, // ISO format (YYYY-MM-DD)
+
+    category: formData.category,
+    pmFreq: Number(formData.pmDaysOption  || 0),
+    pmFreqDays: Number(formData.pmDays),
+    pmFreqShots: Number(formData.pmShots),
+
+    color: formData.color || '',
+    supplier: formData.supplier || '',
+    makerSupplier: formData.maker, // ⚠️ important change
+
+    remarks: formData.remarks || '',
+
+    createdBy: 1, // or dynamic user id
+
+    barcode: formData.barcode,
+    direction: formData.direction,
   };
 }
 
@@ -104,4 +116,15 @@ export function getMouldHealthStatus(mould) {
 export function isPMDue(mould) {
   const health = getMouldHealthStatus(mould);
   return health.pct >= 85 || mould.status === 'Maintenance';
+}
+
+// ── FETCH MOULD MASTER LIST ───────────────────────────────
+export async function getMouldMasterList(params) {
+  const data = await mouldEndpoints.getAll(params); // your API
+  return mapMoulds(data); // reuse your mapper 🔥
+}
+
+export async function createMould(data) {
+  const payload = mapMouldToPayload(data);
+  return await mouldEndpoints.create(payload);
 }
