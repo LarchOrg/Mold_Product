@@ -12,6 +12,7 @@ import { MOCK_MOULDS } from '@/utils/mockData';
 import { useSpecDropdowns } from '@/hooks/useSpecEntry';
 import {
   useMoulds,
+   useMould,  
   useCreateMould,
   useUpdateMould,
   useDeleteMould
@@ -24,47 +25,69 @@ const S = ({ d, size=14 }) => <svg width={size} height={size} viewBox="0 0 24 24
 const STATUSES = ['Active','Maintenance','Critical','Idle'];
 const CAT_KEYS = Object.keys(CATEGORY_LABELS);
 
+// Unified style for all active (non-disabled) inputs and selects
+const activeInputStyle = {
+  ...inputStyle,
+  background: 'var(--surface)',
+  color: 'var(--text)',
+};
+
+// Style for disabled fields
+const disabledInputStyle = {
+  ...inputStyle,
+  opacity: 0.55,
+  cursor: 'not-allowed',
+  background: 'var(--bg4)',
+  color: 'var(--text2)',
+};
+
 export default function MouldPage() {
   const { data: moulds = [], isLoading } = useMoulds();
   const { data: dropdowns = {} } = useSpecDropdowns();
   const PART_OPTIONS = dropdowns.partNoDrp || [];
-  console.log('PART OPTIONS 👉', PART_OPTIONS);
+ const [selectedId, setSelectedId] = useState(null);
+ const { data: selectedMould, isLoading: isMouldLoading } = useMould(selectedId);
   const [modalOpen, setModalOpen]       = useState(false);
   const [deleteModal, setDeleteModal]   = useState(null);
   const [editId, setEditId]             = useState(null);
   const [catFilter, setCatFilter]       = useState('all');
-  const [openingShotLocked, setOpeningShotLocked] = useState(true); // locked in edit by default
 
   const { showToast }                             = useUIStore();
   const { data: FREQ_OPTIONS = [] }               = usePMDropdown();
   const { mutate: createMould }                   = useCreateMould();
-  // const { mutate: updateMould }                   = useUpdateMould();
+  const { mutate: updateMould }                   = useUpdateMould();
   // const { mutate: deleteMould }                   = useDeleteMould();
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
 
-  // Mirror opening shot → current shot live
+  // Mirror opening shot → current shot live (only on create)
   const openingShotVal = watch('openingShot');
   useEffect(() => {
     if (!editId) {
-      // On create: currentShot always mirrors openingShot
       setValue('currentShot', openingShotVal ?? '');
     }
   }, [openingShotVal, editId, setValue]);
 
+  useEffect(() => {
+  if (selectedMould && editId) {
+    reset({
+      ...selectedMould,
+      usedFrom: toInputDate(selectedMould.usedFrom),
+    });
+  }
+}, [selectedMould, editId, reset]);
+
   const openCreate = () => {
     setEditId(null);
-    setOpeningShotLocked(false); // unlocked on create
     reset({ color: 'N/A', usedFrom: new Date().toISOString().split('T')[0], openingShot: '', currentShot: '' });
     setModalOpen(true);
   };
 
-  const openEdit = m => {
-    setEditId(m.id);
-    setOpeningShotLocked(true); // locked on edit by default
-    reset({ ...m, usedFrom: toInputDate(m.usedFrom) });
-    setModalOpen(true);
-  };
+const openEdit = (m) => {
+  setSelectedId(m.id);
+  setEditId(m.id);
+  setModalOpen(true);
+};
 
   const confirmDelete = () => {
     deleteMould(deleteModal.id, {
@@ -103,7 +126,8 @@ export default function MouldPage() {
       render: v => <span style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12 }}>{formatNumber(v)}</span> },
     { key: 'lifeShot',    label: 'Life Shot',    align: 'right',
       render: v => <span style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12 }}>{formatNumber(v)}</span> },
-    { key: 'shotLife', label: 'Shot %', sortable: false,
+    {
+      key: 'shotLifeBar', label: 'Shot %', sortable: false,
       render: (_, row) => {
         const pct = getShotLifePercent(row);
         const col = getShotLifeColor(pct);
@@ -128,9 +152,9 @@ export default function MouldPage() {
           <button onClick={() => showToast({ type: 'info', title: 'Print Label', message: `Printing label for ${row.code}...` })} title="Print" style={actBtn}>
             <S d={<><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>}/>
           </button>
-          <button onClick={() => setDeleteModal(row)} title="Delete" style={{ ...actBtn, color: 'var(--red)' }}>
+          {/* <button onClick={() => setDeleteModal(row)} title="Delete" style={{ ...actBtn, color: 'var(--red)' }}>
             <S d={<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>}/>
-          </button>
+          </button> */}
         </div>
       ),
     },
@@ -191,75 +215,50 @@ export default function MouldPage() {
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-          <FormField label="Model Code" required error={errors.code?.message}>
-            <input {...register('code', { required: 'Required' })} placeholder="ML-0042" style={inputStyle}/>
+          <FormField label="Mould Code" required error={errors.code?.message}>
+            <input {...register('code', { required: 'Required' })} placeholder="ML-0042" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Mould Name" required error={errors.name?.message}>
-            <input {...register('name', { required: 'Required' })} placeholder="Front Cover" style={inputStyle}/>
+            <input {...register('name', { required: 'Required' })} placeholder="Front Cover" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Mould Size" required error={errors.size?.message}>
-            <input {...register('size', { required: 'Required' })} placeholder="450×300×200" style={inputStyle}/>
+            <input {...register('size', { required: 'Required' })} placeholder="450×300×200" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Cavity" required error={errors.cavity?.message}>
-            <input {...register('cavity', { required: 'Required' })} type="number" placeholder="4" style={inputStyle}/>
+            <input {...register('cavity', { required: 'Required' })} type="number" placeholder="4" style={activeInputStyle}/>
           </FormField>
 
-          {/* ── Opening Shot — locked in edit, unlock button shown ── */}
-          <FormField
-            label={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>Opening Shot <span style={{ color: 'var(--red)' }}>*</span></span>
-                {editId && (
-                  <button
-                    type="button"
-                    onClick={() => setOpeningShotLocked(l => !l)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 4,
-                      padding: '2px 8px', borderRadius: 5, fontSize: 10, fontWeight: 600,
-                      cursor: 'pointer', letterSpacing: '0.05em',
-                      background: openingShotLocked ? 'var(--bg4)' : 'var(--accent-glow)',
-                      border:     openingShotLocked ? '1px solid var(--border)' : '1px solid var(--accent)',
-                      color:      openingShotLocked ? 'var(--text3)' : 'var(--accent)',
-                      transition: 'all var(--trans)',
-                    }}
-                  >
-                    {openingShotLocked ? (
-                      <>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                        Unlock
-                      </>
-                    ) : (
-                      <>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-                        </svg>
-                        Lock
-                      </>
-                    )}
-                  </button>
-                )}
+          {/* ── Opening Shot — unlocked on create, always disabled on edit ── */}
+          <FormField label="Opening Shot" required error={errors.openingShot?.message}>
+            {editId ? (
+              <div style={{ position: 'relative' }}>
+                <input
+                  {...register('openingShot', { required: 'Required' })}
+                  type="number"
+                  placeholder="0"
+                  disabled
+                  style={{ ...disabledInputStyle, paddingRight: 36 }}
+                />
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: 'var(--text3)', pointerEvents: 'none', display: 'flex',
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
               </div>
-            }
-            required
-            error={errors.openingShot?.message}
-          >
-            <input
-              {...register('openingShot', { required: 'Required' })}
-              type="number"
-              placeholder="0"
-              disabled={editId ? openingShotLocked : false}
-              style={{
-                ...inputStyle,
-                opacity:    (editId && openingShotLocked) ? 0.55 : 1,
-                cursor:     (editId && openingShotLocked) ? 'not-allowed' : 'text',
-                background: (editId && openingShotLocked) ? 'var(--bg4)' : undefined,
-              }}
-            />
+            ) : (
+              <input
+                {...register('openingShot', { required: 'Required' })}
+                type="number"
+                placeholder="0"
+                style={activeInputStyle}
+              />
+            )}
           </FormField>
 
           {/* ── Current Shot — always disabled, mirrors opening shot on create ── */}
@@ -270,13 +269,7 @@ export default function MouldPage() {
                 type="number"
                 placeholder="Auto"
                 disabled
-                style={{
-                  ...inputStyle,
-                  opacity: 0.55,
-                  cursor: 'not-allowed',
-                  background: 'var(--bg4)',
-                  paddingRight: 36,
-                }}
+                style={{ ...disabledInputStyle, paddingRight: 36 }}
               />
               <span style={{
                 position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
@@ -290,78 +283,82 @@ export default function MouldPage() {
           </FormField>
 
           <FormField label="Life Shot" required error={errors.lifeShot?.message}>
-            <input {...register('lifeShot', { required: 'Required' })} type="number" placeholder="500000" style={inputStyle}/>
+            <input {...register('lifeShot', { required: 'Required' })} type="number" placeholder="500000" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Location" required error={errors.location?.message}>
-            <input {...register('location', { required: 'Required' })} placeholder="Shop Floor A" style={inputStyle}/>
+            <input {...register('location', { required: 'Required' })} placeholder="Shop Floor A" style={activeInputStyle}/>
           </FormField>
 
-         <FormField label="Part No" required error={errors.partNo?.message}>
-  <SearchableSelect
-    options={PART_OPTIONS}
-    value={watch('partNo') ?? ''}
-    onChange={val => setValue('partNo', val, { shouldValidate: true })}
-    placeholder="Select Part No..."
-  />
-  <input
-    type="hidden"
-    {...register('partNo', { required: 'Select Part No' })}
-  />
-</FormField>
+          <FormField label="Part No" required error={errors.partNo?.message}>
+            <SearchableSelect
+              options={PART_OPTIONS}
+              value={watch('partNo') ?? ''}
+              onChange={val => setValue('partNo', val, { shouldValidate: true })}
+              placeholder="Select Part No..."
+            />
+            <input
+              type="hidden"
+              {...register('partNo', { required: 'Select Part No' })}
+            />
+          </FormField>
 
           <FormField label="Installation Date" required error={errors.usedFrom?.message}>
-            <input {...register('usedFrom', { required: 'Required' })} type="date" style={inputStyle}/>
+            <input {...register('usedFrom', { required: 'Required' })} type="date" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Category" required error={errors.category?.message}>
-            <select {...register('category', { required: 'Required' })} style={inputStyle}>
+            <select {...register('category', { required: 'Required' })} style={activeInputStyle}>
               <option value="">Select...</option>
               {CAT_KEYS.map(k => <option key={k} value={k}>{CATEGORY_LABELS[k]}</option>)}
             </select>
           </FormField>
 
           <FormField label="Direction" required error={errors.direction?.message}>
-            <select {...register('direction', { required: 'Required' })} style={inputStyle}>
+            <select {...register('direction', { required: 'Required' })} style={activeInputStyle}>
               <option value="">Select...</option>
               <option value="F">Front</option>
               <option value="R">Rear</option>
             </select>
           </FormField>
 
-          {/* ── PM Frequency — reused SearchableSelect from SpecEntry ── */}
+          {/* ── PM Frequency Dropdown ── */}
           <FormField label="PM Frequency (Days)" error={errors.pmDaysOption?.message}>
-  <SearchableSelect
-    options={FREQ_OPTIONS}
-    value={watch('pmDaysOption') ?? ''}
-    onChange={val => setValue('pmDaysOption', Number(val), { shouldValidate: true })}
-    placeholder="Select PM frequency..."
-  />
-  <input type="hidden" {...register('pmDaysOption')} />
-</FormField>
- <FormField label="PM Freq (Days)"  required><input {...register('pmDays',  {required:'Required'})} type="number" placeholder="30" style={inputStyle}/></FormField>
+            <SearchableSelect
+              options={FREQ_OPTIONS}
+              value={watch('pmDaysOption') ?? ''}
+              onChange={val => setValue('pmDaysOption', Number(val), { shouldValidate: true })}
+              placeholder="Select PM frequency..."
+            />
+            <input type="hidden" {...register('pmDaysOption')} />
+          </FormField>
+
+          <FormField label="PM Freq (Days)" required error={errors.pmDays?.message}>
+            <input {...register('pmDays', { required: 'Required' })} type="number" placeholder="30" style={activeInputStyle}/>
+          </FormField>
+
           <FormField label="PM Freq (Shots)" required error={errors.pmShots?.message}>
-            <input {...register('pmShots', { required: 'Required' })} type="number" placeholder="10000" style={inputStyle}/>
+            <input {...register('pmShots', { required: 'Required' })} type="number" placeholder="10000" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Barcode" required error={errors.barcode?.message}>
-            <input {...register('barcode', { required: 'Required' })} placeholder="BC-2024-0042" style={inputStyle}/>
+            <input {...register('barcode', { required: 'Required' })} placeholder="BC-2024-0042" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Mould Color">
-            <input {...register('color')} placeholder="Silver / N/A" style={inputStyle}/>
+            <input {...register('color')} placeholder="Silver / N/A" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Customer">
-            <input {...register('supplier')} placeholder="Customer name" style={inputStyle}/>
+            <input {...register('supplier')} placeholder="Customer name" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Maker / Supplier" required error={errors.maker?.message}>
-            <input {...register('maker', { required: 'Required' })} placeholder="Supplier name" style={inputStyle}/>
+            <input {...register('maker', { required: 'Required' })} placeholder="Supplier name" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Remarks" required full error={errors.remarks?.message}>
-            <textarea {...register('remarks', { required: 'Required' })} placeholder="Additional notes..." style={{ ...inputStyle, minHeight: 72, resize: 'vertical' }}/>
+            <textarea {...register('remarks', { required: 'Required' })} placeholder="Additional notes..." style={{ ...activeInputStyle, minHeight: 72, resize: 'vertical' }}/>
           </FormField>
 
         </div>
@@ -394,7 +391,7 @@ export default function MouldPage() {
   );
 }
 
-// ── Searchable Select — reused from SpecEntryPage ─────────────────────────────
+// ── Searchable Select ─────────────────────────────────────────────────────────
 function SearchableSelect({ options, value, onChange, placeholder = 'Select...', disabled = false, error, maxItems = 4 }) {
   const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState('');
@@ -439,13 +436,12 @@ function SearchableSelect({ options, value, onChange, placeholder = 'Select...',
   return (
     <div ref={wrapRef} style={{ position: 'relative', width: '100%' }}>
 
-      {/* Trigger */}
+      {/* Trigger — matches activeInputStyle */}
       <div
         ref={triggerRef}
         onClick={handleToggle}
         style={{
-          ...inputStyle,
-          background:  disabled ? 'var(--bg3)' : 'var(--surface)',
+          ...activeInputStyle,
           display:     'flex', alignItems: 'center', justifyContent: 'space-between',
           cursor:      disabled ? 'not-allowed' : 'pointer',
           opacity:     disabled ? 0.5 : 1,

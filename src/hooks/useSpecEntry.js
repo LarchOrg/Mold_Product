@@ -10,6 +10,7 @@ import {
 //   getSpecById,
   getImgDropdown,
   getSpecDropdowns,
+  addSpecDropdownItem ,
 } from '@/services/specentryService';
 
 // ── QUERY KEYS ─────────────────────────────────────────────
@@ -63,6 +64,51 @@ export function useSpec(id) {
     enabled: !!id,
   });
 }
+
+export const useAddSpecDropdownItem = () => {
+  const qc = useQueryClient();
+  const { showToast, removeToast } = useUIStore();
+  let savingToastId = null;
+
+  return useMutation({
+    mutationFn: (payload) => addSpecDropdownItem(payload),
+
+    onMutate: () => {
+      savingToastId = showToast({
+        type: 'info',
+        title: 'Saving...',
+        message: 'Adding new item.',
+        autoClose: false,
+      });
+    },
+
+    onSuccess: () => {
+      if (savingToastId) removeToast(savingToastId);
+
+      // ✅ Refresh dropdowns
+      qc.invalidateQueries(['specDropdowns']);  
+
+      showToast({
+        type: 'success',
+        title: 'Added',
+        message: 'Item added successfully.',
+      });
+    },
+
+    onError: (err) => {
+      if (savingToastId) removeToast(savingToastId);
+
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          'Failed to add item',
+      });
+    },
+  });
+};
 
 // ── CREATE ────────────────────────────────────────────────
 export function useCreateSpec() {

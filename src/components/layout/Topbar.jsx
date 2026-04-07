@@ -60,7 +60,7 @@ export default function Topbar() {
   />
 </div>
           <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: '-0.2px' }}>
-            Larch <span style={{ color: 'var(--accent)' }}>ERP</span>
+            Larch <span style={{ color: 'var(--accent)' }}>Mould</span>
           </span>
         </div>
 

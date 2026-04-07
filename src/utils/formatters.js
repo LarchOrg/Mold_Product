@@ -18,9 +18,15 @@ export const toInputDate = (dateStr) =>
 
 // ── Shot life helpers ─────────────────────────────────────────────────────────
 export function getShotLifePercent(mould) {
-  const used  = (mould.currentShot ?? 0) - (mould.openingShot ?? 0);
-  const total = (mould.lifeShot ?? 1)    - (mould.openingShot ?? 0);
+  const opening = Number(mould.openingShot || 0);
+  const current = Number(mould.currentShot || 0);
+  const life    = Number(mould.lifeShot || 0);
+
+  const used  = current - opening;
+  const total = life - opening;
+
   if (total <= 0) return 0;
+
   return Math.min(100, Math.round((used / total) * 100));
 }
 
