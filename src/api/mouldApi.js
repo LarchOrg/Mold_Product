@@ -3,9 +3,10 @@ import { mouldApi } from './axiosInstance';
 export const mouldEndpoints = {
   // ── Mould Master ──────────────────────────────────────────────────────────
   getAll:   (params)  => mouldApi.get('api/Mold/MouldMstFetch', { params }).then(r => r.data),
-  getById:  (id)      => mouldApi.get(`/api/moulds/${id}`).then(r => r.data),
+getById: (id) => mouldApi.get(`/api/Mold/mouldbyid/${id}`).then(r => r.data),
   create:   (payload) => mouldApi.post('api/Mold/InsertMould', payload).then(r => r.data),
-  update:   (id, payload) => mouldApi.put(`/api/moulds/${id}`, payload).then(r => r.data),
+ update: (payload) =>
+  mouldApi.put('/api/Mold/UpdateMouldMst', payload).then(r => r.data),
   remove:   (id)      => mouldApi.delete(`/api/moulds/${id}`).then(r => r.data),
    getDropdown: () => mouldApi.get('/api/Mold/dropdown').then(r => r.data),
   getPMDropdown: () => mouldApi.get('/api/Mold/PMFreqdropdown').then(r => r.data),
@@ -27,6 +28,8 @@ updatePMPlan: (payload) =>  mouldApi.put(`/api/Mold/pmscheduleUpdate`, payload).
   }).then(r => r.data),
    getimgDropdown: () => mouldApi.get('/api/Mold/Imgdropdown').then(r =>r.data),
    getAllDropdowns: () => mouldApi.get('/api/Mold/alldropdowns').then(r => r.data),
+insertDropdownItem: (payload) =>
+  mouldApi.post('/api/Mold/Insert-CheckAll', payload).then(r => r.data),
   // ── Checksheet ────────────────────────────────────────────────────────────
 getChecksheet: () =>
   mouldApi.get('api/Mold/PMCheckSheetFetch').then(r => r.data),

@@ -28,12 +28,14 @@ const NAV = [
   ]},
   { section: 'Transactions', items: [
     { to: '/pm-plans',        icon: 'Calendar',  label: 'Prevention Plan', badge: '3' },
-    { to: '/checksheet',      icon: 'Check',     label: 'Checksheet Entry' },
+    { to: '/checksheet',      icon: 'Check',     label: 'PM Checksheet Entry' },
+    { to: '/daily-checksheet', icon: 'Check', label: 'Daily Checksheet Entry' },
   ]},
   { section: 'Reports',      items: [
     { to: '/reports/life',        icon: 'BarChart', label: 'Mould Life Report' },
-    { to: '/reports/pm-history',  icon: 'Clock',    label: 'PM History' },
+    { to: '/reports/pm-history',  icon: 'Clock',    label: 'PM Report' },
      { to: '/reports/mould-history', icon: 'FileText', label: 'Mould History' }, 
+     { to: '/reports/dailyreport', icon: 'FileText', label: 'Daily Report' }, 
   ]},
   { section: 'System',       items: [
     { to: '/users',           icon: 'Users',    label: 'Users' },

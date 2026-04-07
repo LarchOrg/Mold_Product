@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/uiStore';
 
-import { getMouldDropdown, getMouldMasterList ,createMould  } from '@/services/mouldService';
+import { getMouldDropdown, getMouldMasterList ,createMould,getMouldById,updateMould      } from '@/services/mouldService';
 
 const KEYS = {
   all: ['moulds'],
@@ -69,14 +69,39 @@ export function useCreateMould() {
 export function useUpdateMould() {
   const qc = useQueryClient();
   const { showToast } = useUIStore();
+
   return useMutation({
-    mutationFn: ({ id, ...data }) => mouldEndpoints.update(id, data),
+    mutationFn: (vars) => {
+      if (!vars || !vars.id) {
+        console.error('❌ Invalid update payload:', vars);
+        throw new Error('Invalid update data');
+      }
+
+      const { id, ...data } = vars;
+      return updateMould(id, data);
+    },
+
     onSuccess: (_, vars) => {
       qc.invalidateQueries(KEYS.all);
       qc.invalidateQueries(KEYS.detail(vars.id));
-      showToast({ type: 'success', title: 'Updated', message: 'Mould updated successfully.' });
+
+      showToast({
+        type: 'success',
+        title: 'Updated',
+        message: 'Mould updated successfully.',
+      });
     },
-    onError: (err) => showToast({ type: 'error', title: 'Error', message: err.message }),
+
+    onError: (err) => {
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          'Update failed',
+      });
+    },
   });
 }
 

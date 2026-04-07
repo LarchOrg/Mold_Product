@@ -25,16 +25,18 @@ export const getSpecs = async (params) => {
 
 export const createSpec = async (data) => {
   const payload = {
-    mouldMachineId: Number(data.mouldId),   
-    checkAreaId: Number(data.area),         
-    checkPoint: Number(data.point),         
-    checkMethod: Number(data.method),       
-    pmFreq: Number(data.freq),              
-    imgId: Number(data.image),              
-    orderby: Number(data.order),            
-    resultId: Number(data.condition),       
+    mouldMachineId: Number(data.mouldId) || 0,
+    checkAreaId: Number(data.area) || 0,
+    checkPoint: Number(data.point) || 0,
+    checkMethod: Number(data.method) || 0,
+    pmFreq: Number(data.freq) || 0,
+    imgId: Number(data.image) || 0,
+    orderby: Number(data.order) || 0,
+    resultId: Number(data.condition) || 0,
     createdBy: 3,
   };
+
+
 
   return await mouldEndpoints.createSpec(payload);
 };
@@ -87,4 +89,22 @@ export const getSpecDropdowns = async () => {
       value: i.id,
     })),
   };
+};
+
+
+const typeMap = {
+  checkAreas: 'checkAreas',
+  checkPoints: 'checkPoint',
+  checkMethods: 'checkMethod',
+  conditions: 'reqCondition'
+};
+
+export const addSpecDropdownItem = async ({ fieldKey, value }) => {
+  const payload = {
+    type: typeMap[fieldKey],
+    name: value,
+    createdBy: 3
+  };
+
+  return await mouldEndpoints.insertDropdownItem(payload);
 };
