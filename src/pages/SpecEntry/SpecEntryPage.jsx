@@ -284,7 +284,23 @@ export default function SpecEntryPage() {
     },
     { key: 'mouldName', label: 'Mould Name' },
     { key: 'area',      label: 'Check Area' },
-    { key: 'point',     label: 'Check Point' },
+    {
+  key: 'point',
+  label: 'Check Point',
+  render: v => (
+    <div
+      style={{
+        width: 190,              // 👈 force width
+        maxWidth: 190,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }}
+    >
+      {v}
+    </div>
+  )
+},
     { key: 'method',    label: 'Method' },
     { key: 'condition', label: 'Condition' },
     { key: 'freq',      label: 'Frequency' },

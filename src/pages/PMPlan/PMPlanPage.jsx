@@ -47,6 +47,15 @@ function isDateToday(y, m, d) {
   const t = new Date();
   return t.getFullYear() === y && t.getMonth() === m && t.getDate() === d;
 }
+
+// ── NEW: returns true if the given calendar day is strictly before today ──────
+function isDatePast(y, m, d) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(y, m, d);
+  return target < today;
+}
+
 function formatDisplayDate(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', {
     day: 'numeric', month: 'long', year: 'numeric',
@@ -68,11 +77,10 @@ export default function PMPlanPage() {
   const [deleteModal, setDeleteModal] = useState(null);  // plan object
 
   // ── FIX: Track mould/pm selections in plain state — NOT via RHF
-  //    This avoids the hidden-input / virtual-register race condition entirely.
   const [addMouldId, setAddMouldId] = useState('');
   const [addPmId,    setAddPmId]    = useState('');
   const [planType,   setPlanType]   = useState('pm');
-  const [addErrors,  setAddErrors]  = useState({});  // manual validation errors
+  const [addErrors,  setAddErrors]  = useState({});
 
   // Hooks
   const { data: plans = [], isLoading }                        = usePMPlans();
@@ -84,10 +92,8 @@ export default function PMPlanPage() {
   const { mutate: deletePMPlan }                               = useDeletePMPlan();
   const { showToast }                                          = useUIStore();
 
-  // Edit form — only used for the edit modal (date field)
   const { register, handleSubmit, reset, formState: { errors } } = useForm();
 
-  // Sync edit data into form
   useEffect(() => {
     if (editData && editModal?.id) {
       reset({ date: editData.date });
@@ -153,7 +159,6 @@ export default function PMPlanPage() {
   // ── Open add modal ────────────────────────────────────────────────────────
   const openAdd = (dayNum) => {
     const isTod = isDateToday(viewYear, viewMonth, dayNum);
-    // Reset all add-modal state
     setAddMouldId('');
     setAddPmId('');
     setAddErrors({});
@@ -169,9 +174,8 @@ export default function PMPlanPage() {
     setAddErrors({});
   };
 
-  // ── FIX: Save plan — uses plain state, NOT RHF, so values are always current ──
+  // ── Save plan ─────────────────────────────────────────────────────────────
   const handleSavePlan = () => {
-    // Manual validation
     const errs = {};
     if (!addMouldId) errs.mouldId = 'Select a mould';
     if (planType === 'pm' && !addPmId) errs.pmId = 'Select a PM frequency';
@@ -196,7 +200,7 @@ export default function PMPlanPage() {
     );
   };
 
-  // ── Edit submit (only date field, uses RHF) ───────────────────────────────
+  // ── Edit submit ───────────────────────────────────────────────────────────
   const onSubmitEdit = (data) => {
     updatePMPlan(
       { id: editModal.id, ...data },
@@ -228,6 +232,9 @@ export default function PMPlanPage() {
         return d.getFullYear() === viewYear && d.getMonth() === viewMonth && d.getDate() === dayModal.dayNum;
       })
     : [];
+
+  // ── Is the currently open day modal a past date? ──────────────────────────
+  const isDayPast = dayModal ? isDatePast(viewYear, viewMonth, dayModal.dayNum) : false;
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -309,6 +316,8 @@ export default function PMPlanPage() {
             const dayChips = isOther ? [] : (planMap[dayNum] || []);
             const maxShow  = 3;
             const extra    = dayChips.length - maxShow;
+            // Dim past date cells subtly
+            const isPast   = !isOther && isDatePast(viewYear, viewMonth, dayNum);
 
             return (
               <div
@@ -321,6 +330,8 @@ export default function PMPlanPage() {
                   background:   isOther ? 'var(--bg2)' : isToday ? 'rgba(79,143,255,0.04)' : 'var(--bg)',
                   cursor:       isOther ? 'default' : 'pointer',
                   transition:   'background var(--trans)',
+                  // Subtle dimming for past dates
+                  opacity:      isPast ? 0.65 : 1,
                 }}
                 onMouseEnter={e => { if (!isOther) e.currentTarget.style.background = 'var(--bg2)'; }}
                 onMouseLeave={e => { if (!isOther) e.currentTarget.style.background = isToday ? 'rgba(79,143,255,0.04)' : 'var(--bg)'; }}
@@ -347,72 +358,129 @@ export default function PMPlanPage() {
         </div>
       </div>
 
-      {/* ══ Day Modal ════════════════════════════════════════════════════════ */}
+      {/* ══ Day Modal ════════════════════════════════════════════════════════
+          CHANGED:
+          - Layout is now a 3-column card grid with max-height + overflow scroll
+          - "Add Plan" button and "Close" button are hidden for past dates
+          - Only a "Close" label button shown for past dates
+      ════════════════════════════════════════════════════════════════════ */}
       <Modal
         open={!!dayModal}
         onClose={() => setDayModal(null)}
         title={dayModal ? `${MONTH_SHORT[viewMonth]} ${dayModal.dayNum}, ${viewYear}` : ''}
-        size="sm"
-        footer={<>
-          <Button variant="secondary" onClick={() => setDayModal(null)}>Close</Button>
-          <Button onClick={() => openAdd(dayModal.dayNum)}>
-            <IconPlus/> Add Plan
-          </Button>
-        </>}
+        size="xl"
+        footer={
+          <>
+            {/* Past date: only a plain close button, no Add Plan */}
+            {isDayPast ? (
+              <Button variant="secondary" onClick={() => setDayModal(null)}>Close</Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => setDayModal(null)}>Close</Button>
+                <Button onClick={() => openAdd(dayModal.dayNum)}>
+                  <IconPlus/> Add Plan
+                </Button>
+              </>
+            )}
+          </>
+        }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {dayPlans.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '8px 0 16px' }}>
-              No plans for this day
-            </p>
-          ) : dayPlans.map(p => {
-            const barColor = p.type === 'daily' ? 'var(--purple)'
-              : p.status === 'Completed' ? 'var(--green,#3b6d11)'
-              : p.status === 'Overdue'   ? 'var(--red)'
-              : 'var(--accent)';
-            return (
-              <div key={p.id} style={{ background: 'var(--bg3)', borderRadius: 8, padding: 12, border: '1px solid var(--border)' }}>
-                <div style={{ height: 3, borderRadius: 2, background: barColor, marginBottom: 10 }}/>
-                <InfoRow label="Report No" value={
-                  <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 5, color: 'var(--cyan)', border: '1px solid rgba(6,182,212,0.15)' }}>
-                    {p.reportNo}
-                  </code>
-                }/>
-                <InfoRow label="Mould"   value={p.mould}  />
-                <InfoRow label="Part No" value={p.partNo} />
-                <InfoRow label="Type"    value={
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 12, fontSize: 11, fontWeight: 500,
-                    background: p.type === 'daily' ? 'var(--purple-bg)' : 'var(--accent-glow)',
-                    color:      p.type === 'daily' ? 'var(--purple)'    : 'var(--accent)',
-                  }}>
-                    {p.type === 'daily' ? <IconCalendar size={11}/> : <IconWrench size={11}/>}
-                    {p.type === 'daily' ? 'Daily' : 'PM'} · {p.freq}
-                  </span>
-                }/>
-                <InfoRow label="Status" value={<StatusBadge status={p.status}/>}/>
-                <div style={{ display: 'flex', gap: 6, marginTop: 10, justifyContent: 'flex-end' }}>
-                  <button onClick={() => { setDayModal(null); setEditModal(p); reset({ date: p.date }); }} style={actBtn}>
-                    <IconEdit/> Edit
-                  </button>
-                  <button onClick={() => showToast({ type: 'info', title: 'Checksheet', message: `Opening checksheet for ${p.reportNo}` })} style={actBtn}>
-                    <IconDoc/> Checksheet
-                  </button>
-                  <button onClick={() => { setDayModal(null); setDeleteModal(p); }} style={{ ...actBtn, color: 'var(--red)' }}>
-                    <IconTrash/> Delete
-                  </button>
+        {/* Past date read-only notice */}
+        {isDayPast && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', marginBottom: 14,
+            borderRadius: 8, fontSize: 12,
+            background: 'rgba(186,117,23,0.1)',
+            border: '1px solid rgba(186,117,23,0.2)',
+            color: 'var(--amber,#ba7517)',
+          }}>
+            <IconWarn size={13}/>
+            This is a past date — plans are read-only.
+          </div>
+        )}
+
+        {dayPlans.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text3)', textAlign: 'center', padding: '20px 0 28px' }}>
+            No plans for this day
+          </p>
+        ) : (
+          /* ── 3-column card grid, scrollable ─────────────────────────── */
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 12,
+            maxHeight: 520,
+            overflowY: 'auto',
+            paddingRight: 4,      // breathing room next to scrollbar
+          }}>
+            {dayPlans.map(p => {
+              const barColor = p.type === 'daily' ? 'var(--purple)'
+                : p.status === 'Completed' ? 'var(--green,#3b6d11)'
+                : p.status === 'Overdue'   ? 'var(--red)'
+                : 'var(--accent)';
+              return (
+                <div key={p.id} style={{
+                  background: 'var(--bg3)',
+                  borderRadius: 10,
+                  padding: 12,
+                  border: '1px solid var(--border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0,
+                }}>
+                  {/* Colour bar at top of card */}
+                  <div style={{ height: 3, borderRadius: 2, background: barColor, marginBottom: 10 }}/>
+
+                  <InfoRow label="Report No" value={
+                    <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 11, background: 'var(--bg3)', padding: '2px 6px', borderRadius: 5, color: 'var(--cyan)', border: '1px solid rgba(6,182,212,0.15)' }}>
+                      {p.reportNo}
+                    </code>
+                  }/>
+                  <InfoRow label="Mould"   value={p.mould}  />
+                  <InfoRow label="Part No" value={p.partNo} />
+                  <InfoRow label="Type" value={
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 500,
+                      background: p.type === 'daily' ? 'var(--purple-bg)' : 'var(--accent-glow)',
+                      color:      p.type === 'daily' ? 'var(--purple)'    : 'var(--accent)',
+                    }}>
+                      {p.type === 'daily' ? <IconCalendar size={11}/> : <IconWrench size={11}/>}
+                      {p.type === 'daily' ? 'Daily' : 'PM'} · {p.freq}
+                    </span>
+                  }/>
+                  <InfoRow label="Status" value={<StatusBadge status={p.status}/>}/>
+
+                  {/* Action buttons at bottom of card */}
+                  <div style={{ display: 'flex', gap: 5, marginTop: 10, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => { setDayModal(null); setEditModal(p); reset({ date: p.date }); }}
+                      style={actBtn}
+                    >
+                      <IconEdit size={12}/> Edit
+                    </button>
+                    <button
+                      onClick={() => showToast({ type: 'info', title: 'Checksheet', message: `Opening checksheet for ${p.reportNo}` })}
+                      style={actBtn}
+                    >
+                      <IconDoc size={12}/> Sheet
+                    </button>
+                    <button
+                      onClick={() => { setDayModal(null); setDeleteModal(p); }}
+                      style={{ ...actBtn, color: 'var(--red)' }}
+                    >
+                      <IconTrash size={12}/>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Modal>
 
-      {/* ══ Add Plan Modal ════════════════════════════════════════════════════
-          FIX: Button onClick calls handleSavePlan() directly — NOT handleSubmit().
-          handleSubmit() only knows about RHF-registered fields (date, etc).
-          mouldId and pmId live in plain React state (addMouldId, addPmId)
-          so they are always current and never lost between renders.
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* ══ Add Plan Modal ════════════════════════════════════════════════════ */}
       <Modal
         open={!!addModal}
         onClose={() => { setAddModal(null); setDayModal({ dayNum: addModal?.dayNum }); }}
@@ -421,7 +489,6 @@ export default function PMPlanPage() {
           <Button variant="secondary" onClick={() => { setAddModal(null); setDayModal({ dayNum: addModal?.dayNum }); }}>
             Back
           </Button>
-          {/* ← Direct call, no handleSubmit wrapper */}
           <Button onClick={handleSavePlan}>
             <IconSave/> Save Plan
           </Button>
@@ -482,9 +549,8 @@ export default function PMPlanPage() {
             )}
           </div>
 
-          {/* Mould + PM Frequency — plain state, no RHF */}
+          {/* Mould + PM Frequency */}
           <div style={{ display: 'grid', gridTemplateColumns: planType === 'pm' ? '1fr 1fr' : '1fr', gap: 16 }}>
-
             <FormField label="Mould" required error={addErrors.mouldId}>
               <SearchableSelect
                 options={mouldLoading ? [] : mouldOptions}
@@ -569,9 +635,9 @@ export default function PMPlanPage() {
 // ── Small helpers ─────────────────────────────────────────────────────────────
 function InfoRow({ label, value }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 13 }}>
-      <span style={{ color: 'var(--text3)' }}>{label}</span>
-      <span style={{ color: 'var(--text)', fontWeight: 500 }}>{value}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', fontSize: 12 }}>
+      <span style={{ color: 'var(--text3)', flexShrink: 0 }}>{label}</span>
+      <span style={{ color: 'var(--text)', fontWeight: 500, textAlign: 'right', marginLeft: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{value}</span>
     </div>
   );
 }

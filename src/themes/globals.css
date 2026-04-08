@@ -19,7 +19,7 @@
 
   --text:      #eef0f6;
   --text2:     #7c879e;
-  --text3:     #404b61;
+  --text3:      #eef0f6;
 
   --accent:       #4f8fff;
   --accent2:      #3a76eb;
@@ -63,7 +63,7 @@
   --border3:   rgba(0,0,0,0.18);
   --text:      #0f1623;
   --text2:     #4a5568;
-  --text3:     #9aa5b8;
+  --text3:     #0f1623;
   --accent-glow:  rgba(79,143,255,0.08);
   --accent-glow2: rgba(79,143,255,0.15);
   --green-bg:  rgba(34,197,94,0.08);

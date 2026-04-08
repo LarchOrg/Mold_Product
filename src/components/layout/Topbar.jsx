@@ -60,12 +60,12 @@ export default function Topbar() {
   />
 </div>
           <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: '-0.2px' }}>
-            Larch <span style={{ color: 'var(--accent)' }}>Mould</span>
+            Larch <span style={{ color: 'var(--accent)' }}>Mold</span>
           </span>
         </div>
 
         {/* Search */}
-        <div style={{
+        {/* <div style={{
           flex: 1, maxWidth: 320, display: 'flex', alignItems: 'center', gap: 8,
           background: 'var(--bg3)', border: '1px solid var(--border)',
           borderRadius: 8, padding: '0 12px', height: 34,
@@ -80,7 +80,7 @@ export default function Topbar() {
             border: '1px solid var(--border2)', borderRadius: 4,
             padding: '1px 5px', fontFamily: 'inherit',
           }}>⌘K</kbd>
-        </div>
+        </div> */}
 
         {/* Right */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
