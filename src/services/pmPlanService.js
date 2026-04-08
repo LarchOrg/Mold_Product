@@ -14,7 +14,7 @@ const formatToApiDate = (d) => {
 const mapToApiPayload = (data) => {
   return {
     dDate: data.planType === 'daily'
-      ? TODAY
+      ? formatToApiDate(TODAY)
       : formatToApiDate(data.date),   // ✅ FIX HERE
 
     iMouldId: Number(data.mouldId),

@@ -142,7 +142,7 @@ const openEdit = (m) => {
       },
     },
     { key: 'category', label: 'Cat',    render: v => <CategoryBadge category={v}/> },
-    { key: 'status',   label: 'Status', render: v => <StatusBadge   status={v}/> },
+    // { key: 'status',   label: 'Status', render: v => <StatusBadge   status={v}/> },
     { key: 'actions', label: '', sortable: false,
       render: (_, row) => (
         <div style={{ display: 'flex', gap: 4 }}>
@@ -216,7 +216,7 @@ const openEdit = (m) => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
           <FormField label="Mould Code" required error={errors.code?.message}>
-            <input {...register('code', { required: 'Required' })} placeholder="ML-0042" style={activeInputStyle}/>
+            <input {...register('code', { required: 'Required' })} placeholder="Enter a Mold Code" style={activeInputStyle}/>
           </FormField>
 
           <FormField label="Mould Name" required error={errors.name?.message}>
@@ -228,7 +228,7 @@ const openEdit = (m) => {
           </FormField>
 
           <FormField label="Cavity" required error={errors.cavity?.message}>
-            <input {...register('cavity', { required: 'Required' })} type="number" placeholder="4" style={activeInputStyle}/>
+            <input {...register('cavity', { required: 'Required' })} type="number" placeholder="Enter number of cavity" style={activeInputStyle}/>
           </FormField>
 
           {/* ── Opening Shot — unlocked on create, always disabled on edit ── */}

@@ -23,7 +23,7 @@ const Icons = {
 const NAV = [
   { section: 'Overview',     items: [{ to: '/dashboard', icon: 'Grid',      label: 'Dashboard' }] },
   { section: 'Masters',      items: [
-    { to: '/moulds',          icon: 'Box',       label: 'Mould Master' },
+    { to: '/moulds',          icon: 'Box',       label: 'Mold Master' },
     { to: '/spec-entry',      icon: 'Clipboard', label: 'PM Spec Entry' },
   ]},
   { section: 'Transactions', items: [
@@ -32,9 +32,9 @@ const NAV = [
     { to: '/daily-checksheet', icon: 'Check', label: 'Daily Checksheet Entry' },
   ]},
   { section: 'Reports',      items: [
-    { to: '/reports/life',        icon: 'BarChart', label: 'Mould Life Report' },
+    { to: '/reports/life',        icon: 'BarChart', label: 'Mold Life Report' },
     { to: '/reports/pm-history',  icon: 'Clock',    label: 'PM Report' },
-     { to: '/reports/mould-history', icon: 'FileText', label: 'Mould History' }, 
+     { to: '/reports/mould-history', icon: 'FileText', label: 'Mold History' }, 
      { to: '/reports/dailyreport', icon: 'FileText', label: 'Daily Report' }, 
   ]},
   { section: 'System',       items: [

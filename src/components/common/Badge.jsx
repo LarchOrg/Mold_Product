@@ -1,5 +1,6 @@
 const STATUS_MAP = {
   Active:      { bg:'var(--green-bg)',  color:'var(--green)',  dot:'var(--green)' },
+  Open:      { bg:'var(--green-bg)',  color:'var(--green)',  dot:'var(--green)' },
   Completed:   { bg:'var(--green-bg)',  color:'var(--green)',  dot:'var(--green)' },
   Pass:        { bg:'var(--green-bg)',  color:'var(--green)',  dot:'var(--green)' },
   Maintenance: { bg:'var(--amber-bg)',  color:'var(--amber)',  dot:'var(--amber)' },
