@@ -103,12 +103,12 @@ const openEdit = (m) => {
     if (editId) {
       updateMould(
         { id: editId, ...data },
-        { onSuccess: () => { showToast({ type: 'success', title: 'Updated', message: 'Mould record updated.' }); setModalOpen(false); } }
+        { onSuccess: () => { showToast({ type: 'success', title: 'Updated', message: 'Mold record updated.' }); setModalOpen(false); } }
       );
     } else {
       createMould(
         data,
-        { onSuccess: () => { showToast({ type: 'success', title: 'Saved', message: 'New mould added.' }); setModalOpen(false); } }
+        { onSuccess: () => { showToast({ type: 'success', title: 'Saved', message: 'New Mold added.' }); setModalOpen(false); } }
       );
     }
   };
@@ -116,7 +116,7 @@ const openEdit = (m) => {
   const displayData = catFilter === 'all' ? moulds : moulds.filter(m => m.category === catFilter);
 
   const columns = [
-    { key: 'code', label: 'Model', primary: true,
+    { key: 'code', label: 'Mold Code', primary: true,
       render: v => <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 5, color: 'var(--cyan)', border: '1px solid rgba(6,182,212,0.15)' }}>{v}</code> },
     { key: 'name',        label: 'Mould Name' },
     { key: 'size',        label: 'Size' },
@@ -162,7 +162,7 @@ const openEdit = (m) => {
 
   return (
     <div>
-      <PageHeader title="Mould Master" subtitle="Manage all mould records and configurations"
+      <PageHeader title="Mold Master" subtitle="Manage all mould records and configurations"
         actions={<>
           <Button variant="secondary" size="sm">
             <S size={12} d={<><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></>}/> Excel
@@ -171,7 +171,7 @@ const openEdit = (m) => {
             <S size={12} d={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></>}/> PDF
           </Button>
           <Button onClick={openCreate}>
-            <S size={12} d={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>}/> Add Mould
+            <S size={12} d={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>}/> Add Mold
           </Button>
         </>}
       />
@@ -203,7 +203,7 @@ const openEdit = (m) => {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editId ? 'Edit Mould' : 'Add New Mould'}
+        title={editId ? 'Edit Mould' : 'Add New Mold'}
         size="lg"
         footer={<>
           <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
@@ -215,15 +215,15 @@ const openEdit = (m) => {
       >
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
 
-          <FormField label="Mould Code" required error={errors.code?.message}>
+          <FormField label="Mold Code" required error={errors.code?.message}>
             <input {...register('code', { required: 'Required' })} placeholder="Enter a Mold Code" style={activeInputStyle}/>
           </FormField>
 
-          <FormField label="Mould Name" required error={errors.name?.message}>
+          <FormField label="Mold Name" required error={errors.name?.message}>
             <input {...register('name', { required: 'Required' })} placeholder="Front Cover" style={activeInputStyle}/>
           </FormField>
 
-          <FormField label="Mould Size" required error={errors.size?.message}>
+          <FormField label="Mold Size" required error={errors.size?.message}>
             <input {...register('size', { required: 'Required' })} placeholder="450×300×200" style={activeInputStyle}/>
           </FormField>
 
@@ -345,7 +345,7 @@ const openEdit = (m) => {
             <input {...register('barcode', { required: 'Required' })} placeholder="BC-2024-0042" style={activeInputStyle}/>
           </FormField>
 
-          <FormField label="Mould Color">
+          <FormField label="Mold Color">
             <input {...register('color')} placeholder="Silver / N/A" style={activeInputStyle}/>
           </FormField>
 

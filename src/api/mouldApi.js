@@ -20,9 +20,10 @@ updatePMPlan: (payload) =>  mouldApi.put(`/api/Mold/pmscheduleUpdate`, payload).
 
   // ── Spec Entry ────────────────────────────────────────────────────────────
   getSpecs:   (params)      => mouldApi.get('/api/Mold/MoldSpecFetch', { params }).then(r => r.data),
-  createSpec: (payload)     => mouldApi.post('/api/Mold/Insertspecentry', payload).then(r => r.data),
-  updateSpec: (id, payload) => mouldApi.put(`/api/specs/${id}`, payload).then(r => r.data),
-  deleteSpec: (id)          => mouldApi.delete(`/api/specs/${id}`).then(r => r.data),
+  getSpecsById: (id) => mouldApi.get(`/api/Mold/pmspecentrybyid/${id}`).then(r => r.data),
+  createSpec: (payload) => mouldApi.post('/api/Mold/Insertspecentry', payload).then(r => r.data),
+  updateSpec: (payload) => mouldApi.put('/api/Mold/pmspecUpdate', payload).then(r => r.data),
+  deleteSpec: (id) => mouldApi.delete(`/api/Mold/PMSpec/${id}`).then(r => r.data),
   uploadSpecCsv: (formData) => mouldApi.post('/api/specs/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(r => r.data),

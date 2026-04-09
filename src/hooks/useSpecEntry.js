@@ -7,7 +7,7 @@ import {
   createSpec,
   updateSpec,
   deleteSpec,
-//   getSpecById,
+  getSpecById,
   getImgDropdown,
   getSpecDropdowns,
   addSpecDropdownItem ,
@@ -17,7 +17,7 @@ import {
 const KEYS = {
   all: ['specs'],
   list: (p) => ['specs', 'list', p],
-  detail: (id) => ['specs', id],
+ detail: (id) => ['specs', 'detail', id],
   imgDropdown: ['imgDropdown'],
 };
 
@@ -47,7 +47,7 @@ export const useSpecDropdowns = () =>
 //   });
 // }
 export function useSpecs(params) {
-   console.log('useSpecs hook called');
+  //  console.log('useSpecs hook called');
   return useQuery({
     queryKey: KEYS.list(params || {}),
     queryFn: () => getSpecs(params || {}),
@@ -61,7 +61,8 @@ export function useSpec(id) {
   return useQuery({
     queryKey: KEYS.detail(id),
     queryFn: () => getSpecById(id),
-    enabled: !!id,
+    enabled: !!id, // only call when id exists
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -161,11 +162,16 @@ export function useUpdateSpec() {
   const { showToast } = useUIStore();
 
   return useMutation({
-    mutationFn: ({ id, ...data }) => updateSpec(id, data),
+    mutationFn: (data) => updateSpec(data),
 
     onSuccess: (_, vars) => {
+      // ✅ Refresh full list
       qc.invalidateQueries(KEYS.all);
-      qc.invalidateQueries(KEYS.detail(vars.id));
+
+      // ✅ Refresh specific record only if id exists
+      if (vars?.id) {
+        qc.invalidateQueries(KEYS.detail(vars.id));
+      }
 
       showToast({
         type: 'success',
@@ -187,47 +193,49 @@ export function useUpdateSpec() {
   });
 }
 
-// ── DELETE ────────────────────────────────────────────────
 export function useDeleteSpec() {
   const qc = useQueryClient();
   const { showToast, removeToast } = useUIStore();
   let deletingToastId = null;
 
   return useMutation({
-    mutationFn: (id) => deleteSpec(id),
+    mutationFn: ({ id }) => deleteSpec(id),
 
-    onMutate: (id) => {
+    onMutate: ({ code }) => {
       deletingToastId = showToast({
         type: 'info',
         title: 'Deleting...',
-        message: `Spec ${id} is being deleted.`,
+        message: `Spec ${code} is being deleted.`,
         autoClose: false,
       });
     },
 
-    onSuccess: (_, id) => {
+    onSuccess: (_, vars) => {
       if (deletingToastId) removeToast(deletingToastId);
 
-      qc.invalidateQueries(KEYS.all);
-      qc.invalidateQueries(KEYS.detail(id));
+      // Refresh spec list
+      qc.invalidateQueries({ queryKey: KEYS.all });
+
+      // Refresh deleted detail cache
+      // qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
 
       showToast({
         type: 'success',
         title: 'Deleted',
-        message: `Spec ${id} deleted successfully.`,
+        message: `Spec ${vars.code} deleted successfully.`,
       });
     },
 
     onError: (err) => {
       if (deletingToastId) removeToast(deletingToastId);
 
-      const message =
-        err?.response?.data?.message || err?.message || 'Something went wrong';
-
       showToast({
         type: 'error',
         title: 'Error',
-        message,
+        message:
+          err?.response?.data?.message ||
+          err?.message ||
+          'Something went wrong',
       });
     },
   });

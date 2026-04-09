@@ -21,6 +21,27 @@ export const getSpecs = async (params) => {
   return res?.map(mapSpec);
 };
 
+//get by id
+// ── SINGLE SPEC (GET BY ID) ─────────────────────────────
+
+const mapSpecById = (item) => ({
+  id: item.transId,
+
+  mouldId: item.mouldMachineId,
+  freq: item.pmFreqId,
+  area: item.checkAreaId,
+  point: item.checkPointId,
+  method: item.checkMethodId,
+  condition: item.reqConditionId,
+  image: item.imgId,
+  order: item.orderBy,
+});
+
+export const getSpecById = async (id) => {
+  const res = await mouldEndpoints.getSpecsById(id);
+  return mapSpecById(res);
+};
+
 //insert 
 
 export const createSpec = async (data) => {
@@ -40,14 +61,27 @@ export const createSpec = async (data) => {
 
   return await mouldEndpoints.createSpec(payload);
 };
+//update 
+export const updateSpec = async (data) => {
+  const payload = {
+    id: Number(data.id) || 0,
+    pmFreqId: Number(data.freq) || 0,
+    checkPointId: Number(data.point) || 0,
+    checkMethodId: Number(data.method) || 0,
+    checkAreaId: Number(data.area) || 0,
+    imgId: Number(data.image) || 0,
+    orderBy: Number(data.order) || 0,
+    reqConditionId: Number(data.condition) || 0,
+    updateBy: 3,
+  };
 
-export const updateSpec = async (id, data) => {
-  return await mouldEndpoints.updateSpec(id, data);
+  return await mouldEndpoints.updateSpec(payload);
 };
 
 export const deleteSpec = async (id) => {
   return await mouldEndpoints.deleteSpec(id);
 };
+
 
 // ── IMAGE DROPDOWN ─────────────────────────
 

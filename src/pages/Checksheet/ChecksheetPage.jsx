@@ -157,7 +157,7 @@ export default function ChecksheetPage() {
         </code>
       ),
     },
-    { key: 'mould',  label: 'Mould'  },
+    { key: 'mould',  label: 'Mold'  },
     { key: 'partNo', label: 'Part No' },
     {
       key: 'freq', label: 'Frequency',
