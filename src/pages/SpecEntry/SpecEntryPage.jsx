@@ -11,9 +11,10 @@ import { useImgDropdown } from '@/hooks/useSpecEntry';
 import { useMouldDropdown } from '@/hooks/useMoulds';
 import { usePMDropdown } from '@/hooks/usePMPlans';
 import { useSpecDropdowns } from '@/hooks/useSpecEntry';
-import { useCreateSpec } from '@/hooks/useSpecEntry';
+import { useCreateSpec ,useSpec,useUpdateSpec,useDeleteSpec   } from '@/hooks/useSpecEntry';
 import { useSpecs } from '@/hooks/useSpecEntry';
 import { useAddSpecDropdownItem } from '@/hooks/useSpecEntry'; // ← hook to save new item to DB
+
 
 const S = ({ d, size=14 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -253,17 +254,36 @@ export default function SpecEntryPage() {
   const { data: FREQ_OPTIONS = [] }                       = usePMDropdown();
   const { data: IMAGE_OPTIONS = [], isLoading: imgLoading } = useImgDropdown();
   const { mutate: createSpec }                            = useCreateSpec();
-  const { data: specs = [], isLoading }                   = useSpecs();
+    const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
+  const { data: specData, isLoading: specLoading } = useSpec(editId);
+  const { mutate: updateSpec } = useUpdateSpec();
+  const { mutate: deleteSpec } = useDeleteSpec();
+  useEffect(() => {
+  if (specData) {
+    reset(specData);
+  }
+}, [specData, reset]);
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();
+  const { data: specs = [], isLoading }  = useSpecs();
+
+
 
   const openCreate = () => { setEditId(null); reset({ order: 1 }); setModalOpen(true); };
-  const openEdit   = s  => { setEditId(s.id); reset(s); setModalOpen(true); };
+  const openEdit = (row) => {
+  setEditId(row.id);
+  setModalOpen(true);
+};
 
-  const confirmDelete = () => {
-    setDeleteModal(null);
-    showToast({ type: 'success', title: 'Deleted', message: 'Spec entry removed.' });
-  };
+const confirmDelete = () => {
+  if (!deleteModal?.id) return;
+
+  deleteSpec({
+    id: deleteModal.id,
+    code: deleteModal.mouldCode
+  });
+    setEditId(null);      // important
+  setDeleteModal(null);
+};
 
   const onSubmit = data => {
     if (editId) {
@@ -275,14 +295,14 @@ export default function SpecEntryPage() {
   };
 
   const columns = [
-    { key: 'mouldCode', label: 'Mould Code', primary: true,
+    { key: 'mouldCode', label: 'Mold Code', primary: true,
       render: v => (
         <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 5, color: 'var(--cyan)', border: '1px solid rgba(6,182,212,0.15)' }}>
           {v}
         </code>
       ),
     },
-    { key: 'mouldName', label: 'Mould Name' },
+    { key: 'mouldName', label: 'Mold Name' },
     { key: 'area',      label: 'Check Area' },
     {
   key: 'point',
@@ -390,7 +410,7 @@ export default function SpecEntryPage() {
 
           {/* Mould — only on create */}
           {!editId && (
-            <FormField label="Mould" required error={errors.mouldId?.message}>
+            <FormField label="Mold" required error={errors.mouldId?.message}>
               <SearchableSelect
                 options={MOULD_OPTIONS}
                 value={watch('mouldId') ?? ''}
