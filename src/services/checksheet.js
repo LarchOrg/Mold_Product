@@ -1,5 +1,6 @@
 import { mouldEndpoints } from '@/api/mouldApi';
 
+
 // ── MAP FUNCTION (VERY IMPORTANT) ───────────────────────────
 const mapChecksheet = (item) => ({
   transId: item.transId,
@@ -14,6 +15,31 @@ const mapChecksheet = (item) => ({
   // optional helpers
   isOverdue: item.status === 'Overdue',
 });
+
+// ── MAP DETAILS (FOR MODAL) ───────────────────────────
+const mapChecksheetDetails = (res) => {
+  const list = Array.isArray(res) ? res : [res];
+
+  return list.map(item => ({
+    id: item.id,
+
+    area: item.checkArea,
+    point: item.checkPoint,
+    method: item.checkMethod,
+    condition: item.reqCondition,
+
+    // modal fields
+    currentStatus: item.judgement || '',
+    correctiveAction: item.actionTaken || '',
+    remarks: item.remarks || '',
+
+    beforeImg: item.beforeImg || null,
+    afterImg: item.afterImg || null,
+
+    // if you later show image
+    specImage: item.imageName || null,
+  }));
+};
 
 // ── GET LIST ────────────────────────────────────────────────
 export const getChecksheetList = async () => {
@@ -34,6 +60,30 @@ export const saveChecksheet = async (data) => {
 
   return await mouldEndpoints.saveChecksheet(payload);
 };
+
+// ── CREATE CHECKSHEET ───────────────────────────────────────
+export const checksheetService = {
+  createCheckSheet: async (plan) => {
+    const payload = {
+      reportNo: plan.transId,
+      prepareBy: 'admin',
+      createdBy: 3
+    };
+
+    console.log('Mapped Payload:', payload);
+
+    return await mouldEndpoints.createCheckSheet(payload);
+  },
+
+  // ✅ NEW
+  getChecksheetDetails: async (id) => {
+    const res = await mouldEndpoints.getChecksheetDetails(id);
+    console.log('Details API:', res);
+    return mapChecksheetDetails(res);
+  }
+};
+
+
 
 // ── HELPER ──────────────────────────────────────────────────
 const formatDate = (dateStr) => {

@@ -35,6 +35,11 @@ insertDropdownItem: (payload) =>
 getChecksheet: () =>
   mouldApi.get('api/Mold/PMCheckSheetFetch').then(r => r.data),
   saveChecksheet: (payload) => mouldApi.post('/api/checksheets', payload).then(r => r.data),
+  createCheckSheet: (payload) => mouldApi.post('/api/Mold/CreateCheckSheet', payload).then(r => r.data),
+  getChecksheetDetails: (id) =>
+  mouldApi.get(`/api/Mold/CheckSheetDetails/${id}`).then(r => r.data),
+  
+
 
   // ── Reports ───────────────────────────────────────────────────────────────
   getLifeReport: (params)  => mouldApi.get('/api/reports/life', { params }).then(r => r.data),

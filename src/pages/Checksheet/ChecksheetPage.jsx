@@ -5,7 +5,7 @@ import DataTable    from '@/components/table/DataTable';
 import Modal        from '@/components/common/Modal';
 import { StatusBadge } from '@/components/common/Badge';
 import { useUIStore }  from '@/store/uiStore';
-import { useChecksheetList, useSaveChecksheet } from '@/hooks/useChecksheet';
+import { useChecksheetList, useSaveChecksheet ,useChecksheetDetails } from '@/hooks/useChecksheet';
 
 /* ─── tiny SVG helper ──────────────────────────────────────────────────────── */
 const S = ({ d, size = 14 }) => (
@@ -28,12 +28,24 @@ const freqOptions    = [
   { label: 'Annually',  value: 'Annually'  },
 ];
 const currentStatusList = [
-  { Id: 1, CurrentStatus: "Pending" },
-  { Id: 2, CurrentStatus: "In Progress" },
-  { Id: 3, CurrentStatus: "Completed" },
-  { Id: 4, CurrentStatus: "On Hold" },
-  { Id: 5, CurrentStatus: "Cancelled" }
+  { Id: 1, CurrentStatus: "Pending",     Type: "not_ok" },
+  { Id: 2, CurrentStatus: "In Progress", Type: "not_ok" },
+  { Id: 3, CurrentStatus: "Completed",   Type: "ok"     },
+  { Id: 4, CurrentStatus: "On Hold",     Type: "not_ok" },
+  { Id: 5, CurrentStatus: "Cancelled",   Type: "not_ok" }
 ];
+
+/* ── Derive result from currentStatusList entry ─────────────────────────────
+   Rule: if the selected status has Type === "ok"  → result = "OK"
+         otherwise (not_ok / nothing selected)     → result = "NG"
+         if nothing selected yet                   → result = ""  (blank)
+─────────────────────────────────────────────────────────────────────────── */
+const deriveResult = (currentStatusDropdown) => {
+  if (!currentStatusDropdown) return '';
+  const match = currentStatusList.find(s => s.CurrentStatus === currentStatusDropdown);
+  if (!match) return '';
+  return match.Type === 'ok' ? 'OK' : 'NG';
+};
 
 const STAGE = { LIST: 'list', ENTRY: 'entry' };
 
@@ -42,6 +54,8 @@ const STAGE = { LIST: 'list', ENTRY: 'entry' };
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function ChecksheetPage() {
   const { data: apiData = [], loading } = useChecksheetList();
+  const saveChecksheetMutation = useSaveChecksheet();
+  const checksheetDetailsMutation = useChecksheetDetails();
   const { showToast } = useUIStore();
 
   const [stage, setStage]           = useState(STAGE.LIST);
@@ -61,26 +75,39 @@ export default function ChecksheetPage() {
   const [accessRole] = useState('admin');
 
   /* ── open plan ── */
-  const openPlan = async (plan) => {
-    setSelectedPlan(plan);
-    setSpecs([]);
-    setCredentials({ prepared: plan.prepared ?? '', checked: plan.checked ?? '', approved: plan.approved ?? '' });
-    setStage(STAGE.ENTRY);
-    setSpecsLoading(true);
-    try {
-      await new Promise(r => setTimeout(r, 600));
-      setSpecs(MOCK_SPECS.map(s => ({
-        ...s,
-        currentStatus: '',
-        correctiveAction: '',
-        remarks: '',
-        beforeImg: null,
-        afterImg: null,
-      })));
-    } finally {
+const openPlan = async (plan) => {
+  setSelectedPlan(plan);
+  setSpecs([]);
+  setStage(STAGE.ENTRY);
+  setSpecsLoading(true);
+
+  saveChecksheetMutation.mutate(plan, {
+    onSuccess: async (saveRes) => {
+      try {
+        const id = saveRes?.transId || plan.transId;
+
+        const details = await checksheetDetailsMutation.mutateAsync(id);
+
+        console.log('Fetched details:', details);
+        setSpecs(details);
+
+      } catch (err) {
+        console.error('Fetch failed:', err);
+        showToast({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to load checksheet details'
+        });
+      } finally {
+        setSpecsLoading(false);
+      }
+    },
+    onError: (err) => {
+      console.error('Create failed:', err);
       setSpecsLoading(false);
     }
-  };
+  });
+};
 
   const backToList = () => { setStage(STAGE.LIST); setSelectedPlan(null); setSpecs([]); };
 
@@ -93,7 +120,8 @@ export default function ChecksheetPage() {
     setEntryModalOpen(true);
   };
 
-  const completedCount = specs.filter(s => s.currentStatus && s.currentStatus !== '').length;
+  /* A spec row counts as "completed" when a currentStatusDropdown is chosen */
+  const completedCount = specs.filter(s => s.currentStatusDropdown && s.currentStatusDropdown !== '').length;
   const pendingCount   = specs.length - completedCount;
   const canComplete    = pendingCount === 0 && specs.length > 0;
 
@@ -254,10 +282,9 @@ export default function ChecksheetPage() {
           marginBottom: 2,
         }}>
           <span/>
-         
           <span style={colHeaderStyle}>Check Area</span>
           <span style={colHeaderStyle}>Check Point</span>
-           <span style={colHeaderStyle}>Check Method</span>
+          <span style={colHeaderStyle}>Check Method</span>
           <span style={colHeaderStyle}>Required Condition</span>
           <span style={colHeaderStyle}>Result</span>
           <span style={colHeaderStyle}>Action</span>
@@ -275,7 +302,6 @@ export default function ChecksheetPage() {
                 spec={spec}
                 idx={idx}
                 onOpenEntry={() => openEntryModal(idx)}
-                onQuickResult={val => updateSpecField(spec.id, 'currentStatus', val)}
               />
             ))}
           </div>
@@ -325,14 +351,17 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
   const spec = specs[currentIdx];
   if (!spec) return null;
 
-  const total     = specs.length;
-  const isFirst   = currentIdx === 0;
-  const isLast    = currentIdx === total - 1;
-  const filled    = spec.currentStatus && spec.currentStatus !== '';
-  const isGood    = spec.currentStatus === 'OK' || spec.currentStatus === 'Pass';
-  const isBad     = spec.currentStatus === 'NG' || spec.currentStatus === 'Fail';
+  const total   = specs.length;
+  const isFirst = currentIdx === 0;
+  const isLast  = currentIdx === total - 1;
 
-  const goNext = () => { if (!isLast) setCurrentIdx(i => i + 1); };
+  /* Derive result from currentStatusDropdown for display in modal header */
+  const derivedResult = deriveResult(spec.currentStatusDropdown);
+  const filled  = !!derivedResult;
+  const isGood  = derivedResult === 'OK';
+  const isBad   = derivedResult === 'NG';
+
+  const goNext = () => { if (!isLast)  setCurrentIdx(i => i + 1); };
   const goPrev = () => { if (!isFirst) setCurrentIdx(i => i - 1); };
 
   const handleImgUpload = (field, file) => {
@@ -351,7 +380,7 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
   };
 
   const handleClearRow = () => {
-    onUpdateSpec(spec.id, { currentStatus: '', correctiveAction: '', remarks: '', beforeImg: null, afterImg: null });
+    onUpdateSpec(spec.id, { currentStatusDropdown: '', correctiveAction: '', remarks: '', beforeImg: null, afterImg: null });
   };
 
   /* status color theme for top header gradient */
@@ -380,7 +409,6 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
         .cs-img-drop:hover { border-color: var(--accent) !important; background: var(--accent-glow) !important; }
         .cs-img-drop:hover .cs-img-icon { color: var(--accent) !important; }
         .cs-nav-btn:hover:not(:disabled) { background: var(--bg4) !important; color: var(--text) !important; }
-        .cs-status-pill:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
       `}</style>
 
       <div className="cs-anim" key={spec.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -418,7 +446,7 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
               Prev
             </button>
 
-            {/* center: item counter + status badge */}
+            {/* center: item counter + derived result badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{
                 fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px',
@@ -429,11 +457,11 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
               {filled && (
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
-                  background: RES_BG[spec.currentStatus],
-                  color: RES_COLOR[spec.currentStatus],
-                  border: `1px solid ${RES_COLOR[spec.currentStatus]}44`,
+                  background: RES_BG[derivedResult],
+                  color: RES_COLOR[derivedResult],
+                  border: `1px solid ${RES_COLOR[derivedResult]}44`,
                 }}>
-                  {spec.currentStatus}
+                  {derivedResult}
                 </span>
               )}
             </div>
@@ -468,12 +496,10 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
               paddingRight: 16,
               borderRight: `1px solid ${headerBorderColor}`,
             }}>
-              {/* Check Area */}
               <div>
                 <div style={specLabelStyle}>Check Area</div>
                 <div style={specValueStyle}>{spec.area}</div>
               </div>
-              {/* Check Point */}
               <div>
                 <div style={specLabelStyle}>Check Point</div>
                 <div style={specValueStyle}>{spec.point}</div>
@@ -485,12 +511,10 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
               display: 'flex', flexDirection: 'column', gap: 10,
               paddingLeft: 16,
             }}>
-              {/* Check Method */}
               <div>
                 <div style={specLabelStyle}>Check Method</div>
                 <div style={specValueStyle}>{spec.method}</div>
               </div>
-              {/* Required Condition */}
               <div>
                 <div style={specLabelStyle}>Required Condition</div>
                 <div style={{ ...specValueStyle, wordBreak: 'break-word', lineHeight: 1.5 }}>{spec.condition}</div>
@@ -502,14 +526,15 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
         {/* ── SPEC MINI-NAVIGATOR (dots) ── */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, padding: '14px 18px 0' }}>
           {specs.map((s, i) => {
-            const isDone  = s.currentStatus && s.currentStatus !== '';
-            const isGoodS = s.currentStatus === 'OK' || s.currentStatus === 'Pass';
-            const isBadS  = s.currentStatus === 'NG' || s.currentStatus === 'Fail';
+            const dr      = deriveResult(s.currentStatusDropdown);
+            const isDone  = !!dr;
+            const isGoodS = dr === 'OK';
+            const isBadS  = dr === 'NG';
             return (
               <button
                 key={s.id}
                 onClick={() => setCurrentIdx(i)}
-                title={`${i + 1}. ${s.area} — ${s.point}${isDone ? ` — ${s.currentStatus}` : ' — Pending'}`}
+                title={`${i + 1}. ${s.area} — ${s.point}${isDone ? ` — ${dr}` : ' — Pending'}`}
                 style={{
                   width: i === currentIdx ? 20 : 8,
                   height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
@@ -572,41 +597,6 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
         {/* ── DIVIDER ── */}
         <div style={{ height: 1, background: 'var(--border)', margin: '16px 18px 0' }}/>
 
-        {/* ── RESULT STATUS PICKER ── */}
-        <div style={{ padding: '16px 18px 0' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10 }}>
-            Result *
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {RESULT_OPTIONS.map(opt => {
-              const selected = spec.currentStatus === opt;
-              const col = RES_COLOR[opt];
-              const bg  = RES_BG[opt];
-              return (
-                <button
-                  key={opt}
-                  className="cs-status-pill"
-                  onClick={() => onUpdate(spec.id, 'currentStatus', selected ? '' : opt)}
-                  style={{
-                    padding: '8px 20px', borderRadius: 30, fontSize: 13, fontWeight: 700,
-                    cursor: 'pointer', transition: 'all 0.18s ease',
-                    background: selected ? bg : 'var(--bg3)',
-                    border: `2px solid ${selected ? col : 'var(--border)'}`,
-                    color: selected ? col : 'var(--text3)',
-                    letterSpacing: '0.3px',
-                  }}>
-                  {selected && (
-                    <span style={{ marginRight: 5 }}>
-                      {(opt === 'OK' || opt === 'Pass') ? '✓' : (opt === 'NG' || opt === 'Fail') ? '✗' : '–'}
-                    </span>
-                  )}
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* ── CURRENT STATUS ── */}
         <div style={{ padding: '16px 18px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -633,19 +623,29 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
               style={{ ...inputStyle, height: 34 }}
             >
               <option value="">Select Status</option>
-              {['Pending', 'In Progress', 'Completed', 'On Hold', 'Cancelled'].map((s, i) => (
-                <option key={i} value={s}>{s}</option>
+              {currentStatusList.map((s) => (
+                <option key={s.Id} value={s.CurrentStatus}>{s.CurrentStatus}</option>
               ))}
             </select>
-            <input
-              value={spec.currentStatusDropdown || ''}
-              disabled
-              placeholder="Selected status"
-              style={{ ...inputStyle, height: 34, background: 'var(--bg3)', cursor: 'not-allowed' }}
-            />
+            {/* Read-only derived result pill */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              height: 34, padding: '0 10px', borderRadius: 7,
+              background: derivedResult ? RES_BG[derivedResult] : 'var(--bg3)',
+              border: `1px solid ${derivedResult ? RES_COLOR[derivedResult] + '55' : 'var(--border2)'}`,
+              fontSize: 13, fontWeight: 700,
+              color: derivedResult ? RES_COLOR[derivedResult] : 'var(--text3)',
+              transition: 'all 0.2s',
+              userSelect: 'none',
+            }}>
+              {derivedResult
+                ? <>{derivedResult === 'OK' ? '✓ ' : '✗ '}{derivedResult}</>
+                : <span style={{ fontWeight: 400, fontSize: 12 }}>Result auto-fills</span>
+              }
+            </div>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-            Select the current workflow status. This will be saved along with the checksheet.
+            Select the current workflow status. Result is derived automatically.
           </div>
         </div>
 
@@ -848,10 +848,11 @@ function ImageUploadField({ label, value, onChange, onClear, accent = 'var(--acc
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   SPEC ROW — Check Area and Check Point in separate columns
+   SPEC ROW — Result is read-only, derived from currentStatusDropdown
 ══════════════════════════════════════════════════════════════════════════════ */
-function SpecRow({ spec, idx, onOpenEntry, onQuickResult }) {
-  const val    = spec.currentStatus;
+function SpecRow({ spec, idx, onOpenEntry }) {
+  /* Derive result — read-only, no setter */
+  const val    = deriveResult(spec.currentStatusDropdown);
   const col    = val ? RES_COLOR[val] : undefined;
   const bg     = val ? RES_BG[val]   : undefined;
   const isGood = val === 'OK'   || val === 'Pass';
@@ -897,22 +898,22 @@ function SpecRow({ spec, idx, onOpenEntry, onQuickResult }) {
       {/* condition */}
       <span style={{ fontSize: 12, color: 'var(--text2)' }}>{spec.condition}</span>
 
-      {/* quick result selector */}
-      <select
-        value={val ?? ''}
-        onChange={e => onQuickResult(e.target.value)}
-        style={{
-          background: filled ? bg : 'var(--bg2)',
-          border: `1px solid ${col ? col + '55' : 'var(--border2)'}`,
-          borderRadius: 7, color: col || 'var(--text)', fontSize: 12,
-          padding: '6px 10px', outline: 'none', cursor: 'pointer',
-          fontFamily: 'inherit', fontWeight: val ? 700 : 400,
-          transition: 'all var(--trans)',
-        }}
-      >
-        <option value="">Select…</option>
-        {RESULT_OPTIONS.map(r => <option key={r}>{r}</option>)}
-      </select>
+      {/* read-only derived result pill */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: 34, borderRadius: 7,
+        background: filled ? bg : 'var(--bg2)',
+        border: `1px solid ${col ? col + '55' : 'var(--border2)'}`,
+        fontSize: 12, fontWeight: 700,
+        color: col || 'var(--text3)',
+        userSelect: 'none',
+        transition: 'all var(--trans)',
+      }}>
+        {filled
+          ? <>{isGood ? '✓ ' : '✗ '}{val}</>
+          : <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>—</span>
+        }
+      </div>
 
       {/* open entry button */}
       <button
@@ -1198,7 +1199,6 @@ const colHeaderStyle = {
   fontSize: 10, fontWeight: 700, color: 'var(--text3)',
   textTransform: 'uppercase', letterSpacing: '0.6px',
 };
-/* Modal spec info label/value styles */
 const specLabelStyle = {
   fontSize: 10, fontWeight: 700, color: 'var(--text3)',
   textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4,
