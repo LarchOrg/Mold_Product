@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/uiStore';
-import { getChecksheetList, saveChecksheet } from '@/services/checksheet';
+import { getChecksheetList, saveChecksheet ,checksheetService} from '@/services/checksheet';
 
 // ── QUERY KEYS ─────────────────────────────────────────────
 const KEYS = {
@@ -19,46 +19,94 @@ export function useChecksheetList() {
 }
 
 // ── SAVE ───────────────────────────────────────────────────
+// export function useSaveChecksheet() {
+//   const qc = useQueryClient();
+//   const { showToast, removeToast } = useUIStore();
+//   let savingToastId = null;
+
+//   return useMutation({
+//     mutationFn: (payload) => saveChecksheet(payload),
+
+//     onMutate: () => {
+//       savingToastId = showToast({
+//         type: 'info',
+//         title: 'Saving...',
+//         message: 'Checksheet is being saved.',
+//         autoClose: false,
+//       });
+//     },
+
+//     onSuccess: () => {
+//       if (savingToastId) removeToast(savingToastId);
+
+//       qc.invalidateQueries(KEYS.all);
+
+//       showToast({
+//         type: 'success',
+//         title: 'Saved',
+//         message: 'Checksheet saved successfully.',
+//       });
+//     },
+
+//     onError: (err) => {
+//       if (savingToastId) removeToast(savingToastId);
+
+//       showToast({
+//         type: 'error',
+//         title: 'Error',
+//         message:
+//           err?.response?.data?.message ||
+//           err?.message ||
+//           'Something went wrong',
+//       });
+//     },
+//   });
+// }
+
+// create checksheet
 export function useSaveChecksheet() {
-  const qc = useQueryClient();
-  const { showToast, removeToast } = useUIStore();
-  let savingToastId = null;
+  const { showToast } = useUIStore();
 
   return useMutation({
-    mutationFn: (payload) => saveChecksheet(payload),
+    mutationFn: async (payload) => {
+      const res = await checksheetService.createCheckSheet(payload);
 
-    onMutate: () => {
-      savingToastId = showToast({
-        type: 'info',
-        title: 'Saving...',
-        message: 'Checksheet is being saved.',
-        autoClose: false,
-      });
+      // 🔥 Handle API-level failure (success:false)
+      if (!res?.success) {
+        throw new Error(res?.message || 'Checksheet insert failed.');
+      }
+
+      return res;
     },
 
-    onSuccess: () => {
-      if (savingToastId) removeToast(savingToastId);
-
-      qc.invalidateQueries(KEYS.all);
-
+    onSuccess: (data) => {
       showToast({
         type: 'success',
-        title: 'Saved',
-        message: 'Checksheet saved successfully.',
+        title: 'Success',
+        message: data?.message || 'Checksheet created successfully.',
       });
     },
 
-    onError: (err) => {
-      if (savingToastId) removeToast(savingToastId);
+    onError: (error) => {
+      console.error(error);
 
       showToast({
         type: 'error',
-        title: 'Error',
-        message:
-          err?.response?.data?.message ||
-          err?.message ||
-          'Something went wrong',
+        title: 'Failed',
+        // ✅ Show actual backend message
+        message: error?.message || 'Checksheet insert failed.',
       });
-    },
+    }
   });
 }
+
+
+export const useChecksheetDetails = () => {
+  return useMutation({
+    mutationFn: async (id) => {
+      // 🔥 call service
+      const data = await checksheetService.getChecksheetDetails(id);
+      return data;
+    }
+  });
+};

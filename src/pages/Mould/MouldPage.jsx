@@ -118,7 +118,7 @@ const openEdit = (m) => {
   const columns = [
     { key: 'code', label: 'Mold Code', primary: true,
       render: v => <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 5, color: 'var(--cyan)', border: '1px solid rgba(6,182,212,0.15)' }}>{v}</code> },
-    { key: 'name',        label: 'Mould Name' },
+    { key: 'name',        label: 'Mold Name' },
     { key: 'size',        label: 'Size' },
     { key: 'cavity',      label: 'Cavity', align: 'center' },
     { key: 'partNo',      label: 'Part No' },
@@ -162,7 +162,7 @@ const openEdit = (m) => {
 
   return (
     <div>
-      <PageHeader title="Mold Master" subtitle="Manage all mould records and configurations"
+      <PageHeader title="Mold Master" subtitle="Manage all mold records and configurations"
         actions={<>
           <Button variant="secondary" size="sm">
             <S size={12} d={<><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></>}/> Excel

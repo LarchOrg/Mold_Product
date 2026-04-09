@@ -22,8 +22,8 @@ export function getShotLifePercent(mould) {
   const current = Number(mould.currentShot || 0);
   const life    = Number(mould.lifeShot || 0);
 
-  const used  = current - opening;
-  const total = life - opening;
+  const used  = current;
+  const total = life ;
 
   if (total <= 0) return 0;
 
