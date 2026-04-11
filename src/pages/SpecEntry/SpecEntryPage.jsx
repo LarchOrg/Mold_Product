@@ -252,6 +252,7 @@ export default function SpecEntryPage() {
 
   const { data: MOULD_OPTIONS = [] }                      = useMouldDropdown();
   const { data: FREQ_OPTIONS = [] }                       = usePMDropdown();
+
   const { data: IMAGE_OPTIONS = [], isLoading: imgLoading } = useImgDropdown();
   const { mutate: createSpec }                            = useCreateSpec();
     const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm();

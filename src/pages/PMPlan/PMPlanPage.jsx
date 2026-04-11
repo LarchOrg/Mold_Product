@@ -86,6 +86,10 @@ export default function PMPlanPage() {
   const { data: plans = [], isLoading }                        = usePMPlans();
   const { data: mouldOptions = [], isLoading: mouldLoading }   = useMouldDropdown();
   const { data: pmOptions = [], isLoading: pmLoading }         = usePMDropdown();
+  const filteredPmOptions = (pmOptions || []).filter(
+  opt => !opt.label?.toLowerCase().includes('Daily')
+);
+
   const { data: editData }                                     = usePMPlan(editModal?.id);
   const { mutate: createPMPlan }                               = useCreatePMPlan();
   const { mutate: updatePMPlan }                               = useUpdatePMPlan();
@@ -565,7 +569,7 @@ export default function PMPlanPage() {
             {planType === 'pm' && (
               <FormField label="PM Frequency" required error={addErrors.pmId}>
                 <SearchableSelect
-                  options={pmLoading ? [] : pmOptions}
+                  options={pmLoading ? [] : filteredPmOptions}
                   value={addPmId}
                   onChange={val => { setAddPmId(val); setAddErrors(e => ({ ...e, pmId: '' })); }}
                   placeholder={pmLoading ? 'Loading...' : 'Search frequency...'}

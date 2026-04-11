@@ -1,11 +1,24 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import PageHeader   from '@/components/layout/PageHeader';
-import Button       from '@/components/common/Button';
-import DataTable    from '@/components/table/DataTable';
-import Modal        from '@/components/common/Modal';
-import { StatusBadge } from '@/components/common/Badge';
-import { useUIStore }  from '@/store/uiStore';
-import { useChecksheetList, useSaveChecksheet ,useChecksheetDetails } from '@/hooks/useChecksheet';
+import PageHeader        from '@/components/layout/PageHeader';
+import DataTable         from '@/components/table/DataTable';
+import Modal             from '@/components/common/Modal';
+import { StatusBadge }   from '@/components/common/Badge';
+import { useSpecDropdowns } from '@/hooks/useSpecEntry';
+import { useUIStore }    from '@/store/uiStore';
+import {
+  useChecksheetList,
+  useSaveChecksheet,
+  useChecksheetDetails,
+  useUpdateChecksheet,
+  useCompleteChecksheet
+} from '@/hooks/useChecksheet';
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   IMAGE BASE PATH
+   Files placed at: <project-root>/public/uploads/checksheet/<filename>
+   are served at:   /uploads/checksheet/<filename>
+───────────────────────────────────────────────────────────────────────────── */
+const IMAGE_BASE_PATH = '/uploads/checksheet/';
 
 /* ─── tiny SVG helper ──────────────────────────────────────────────────────── */
 const S = ({ d, size = 14 }) => (
@@ -15,146 +28,133 @@ const S = ({ d, size = 14 }) => (
   </svg>
 );
 
+/* ─── inline spinner ───────────────────────────────────────────────────────── */
+const LoadingSpinner = ({ size = 14 }) => (
+  <>
+    <style>{`@keyframes cs-spin{to{transform:rotate(360deg)}}`}</style>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2.5} strokeLinecap="round"
+      style={{ animation: 'cs-spin 0.7s linear infinite', flexShrink: 0 }}>
+      <path d="M12 2a10 10 0 0 1 10 10" opacity={0.3}/>
+      <path d="M12 2a10 10 0 0 1 10 10"/>
+    </svg>
+  </>
+);
+
 /* ─── constants ────────────────────────────────────────────────────────────── */
-const RESULT_OPTIONS = ['OK', 'NG', 'Pass', 'Fail', 'N/A'];
-const RES_COLOR      = { OK: 'var(--green)', Pass: 'var(--green)', NG: 'var(--red)', Fail: 'var(--red)', 'N/A': 'var(--text3)' };
-const RES_BG         = { OK: 'rgba(34,197,94,0.12)', Pass: 'rgba(34,197,94,0.12)', NG: 'rgba(239,68,68,0.12)', Fail: 'rgba(239,68,68,0.12)', 'N/A': 'var(--bg4)' };
 const STATUS_FILTERS = ['all', 'Pending', 'Overdue'];
 const freqOptions    = [
   { label: 'All',       value: 'all'       },
-  // { label: 'Daily',     value: 'Daily'     },
   { label: 'Monthly',   value: 'Monthly'   },
   { label: 'Quarterly', value: 'Quarterly' },
   { label: 'Annually',  value: 'Annually'  },
 ];
-const currentStatusList = [
-  { Id: 1, CurrentStatus: "Pending",     Type: "not_ok" },
-  { Id: 2, CurrentStatus: "In Progress", Type: "not_ok" },
-  { Id: 3, CurrentStatus: "Completed",   Type: "ok"     },
-  { Id: 4, CurrentStatus: "On Hold",     Type: "not_ok" },
-  { Id: 5, CurrentStatus: "Cancelled",   Type: "not_ok" }
-];
+const STAGE = { LIST: 'list', ENTRY: 'entry' };
 
-/* ── Derive result from currentStatusList entry ─────────────────────────────
-   Rule: if the selected status has Type === "ok"  → result = "OK"
-         otherwise (not_ok / nothing selected)     → result = "NG"
-         if nothing selected yet                   → result = ""  (blank)
-─────────────────────────────────────────────────────────────────────────── */
-const deriveResult = (currentStatusDropdown) => {
-  if (!currentStatusDropdown) return '';
-  const match = currentStatusList.find(s => s.CurrentStatus === currentStatusDropdown);
-  if (!match) return '';
-  return match.Type === 'ok' ? 'OK' : 'NG';
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+const resolveImgSrc = (value) => {
+  if (!value) return null;
+  if (value.startsWith('data:') || value.startsWith('http') || value.startsWith('/')) return value;
+  return `${IMAGE_BASE_PATH}${value}`;
 };
 
-const STAGE = { LIST: 'list', ENTRY: 'entry' };
+const extractFileName = (value) => {
+  if (!value) return null;
+  if (value.startsWith('data:')) return null;
+  return value.split('/').pop();
+};
 
 /* ══════════════════════════════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════════════════ */
 export default function ChecksheetPage() {
-  const { data: apiData = [], loading } = useChecksheetList();
-  const saveChecksheetMutation = useSaveChecksheet();
-  const checksheetDetailsMutation = useChecksheetDetails();
-  const { showToast } = useUIStore();
+  const { data: dropdowns, isLoading: dropdownLoading } = useSpecDropdowns();
 
-  const [stage, setStage]           = useState(STAGE.LIST);
+  /* currentSts already mapped to { label, value, type } by getSpecDropdowns */
+const currentStatusOptions = dropdowns?.currentStatus || [];
+
+  const { data: apiData = [] }         = useChecksheetList();
+  const saveChecksheetMutation         = useSaveChecksheet();
+  const checksheetDetailsMutation      = useChecksheetDetails();
+
+  /* ── useUpdateChecksheet exposes mutate + isPending ── */
+  const updateChecksheetMutation       = useUpdateChecksheet();
+  const completeMutation = useCompleteChecksheet();
+
+  const { showToast }                  = useUIStore();
+
+  const [stage,        setStage]       = useState(STAGE.LIST);
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [statusFilter, setStatus]   = useState('all');
-  const [freqFilter,   setFreqFilter] = useState('all');
-  const [specs,        setSpecs]    = useState([]);
+  const [statusFilter, setStatus]      = useState('all');
+  const [freqFilter,   setFreqFilter]  = useState('all');
+  const [specs,        setSpecs]       = useState([]);
   const [specsLoading, setSpecsLoading] = useState(false);
   const [credentials,  setCredentials] = useState({ prepared: '', checked: '', approved: '' });
-  const [saving,       setSaving]   = useState(false);
-  const [completing,   setCompleting] = useState(false);
+  const [completing,   setCompleting]  = useState(false);
 
-  /* unified entry modal */
   const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [entrySpecIdx,   setEntrySpecIdx]   = useState(0);
-
-  const [accessRole] = useState('admin');
+  const [accessRole]                        = useState('admin');
 
   /* ── open plan ── */
-const openPlan = async (plan) => {
-  setSelectedPlan(plan);
-  setSpecs([]);
-  setStage(STAGE.ENTRY);
-  setSpecsLoading(true);
+  const openPlan = async (plan) => {
+    setSelectedPlan(plan);
+    setSpecs([]);
+    setStage(STAGE.ENTRY);
+    setSpecsLoading(true);
 
-  saveChecksheetMutation.mutate(plan, {
-    onSuccess: async (saveRes) => {
-      try {
-        const id = saveRes?.transId || plan.transId;
-
-        const details = await checksheetDetailsMutation.mutateAsync(id);
-
-        console.log('Fetched details:', details);
-        setSpecs(details);
-
-      } catch (err) {
-        console.error('Fetch failed:', err);
-        showToast({
-          type: 'error',
-          title: 'Error',
-          message: 'Failed to load checksheet details'
-        });
-      } finally {
+    saveChecksheetMutation.mutate(plan, {
+      onSuccess: async (saveRes) => {
+        try {
+          const id      = saveRes?.transId || plan.transId;
+          const details = await checksheetDetailsMutation.mutateAsync(id);
+          setSpecs(details);
+        } catch (err) {
+          console.error('Fetch details failed:', err);
+          showToast({ type: 'error', title: 'Error', message: 'Failed to load checksheet details' });
+        } finally {
+          setSpecsLoading(false);
+        }
+      },
+      onError: (err) => {
+        console.error('Create failed:', err);
         setSpecsLoading(false);
-      }
-    },
-    onError: (err) => {
-      console.error('Create failed:', err);
-      setSpecsLoading(false);
-    }
-  });
-};
+      },
+    });
+  };
 
-  const backToList = () => { setStage(STAGE.LIST); setSelectedPlan(null); setSpecs([]); };
+  const backToList     = () => { setStage(STAGE.LIST); setSelectedPlan(null); setSpecs([]); };
+  const openEntryModal = (idx) => { setEntrySpecIdx(idx); setEntryModalOpen(true); };
 
   const updateSpecField = (id, field, value) =>
     setSpecs(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
 
-  /* open entry modal at specific spec */
-  const openEntryModal = (idx) => {
-    setEntrySpecIdx(idx);
-    setEntryModalOpen(true);
-  };
-
-  /* A spec row counts as "completed" when a currentStatusDropdown is chosen */
-  const completedCount = specs.filter(s => s.currentStatusDropdown && s.currentStatusDropdown !== '').length;
+  const completedCount = specs.filter(s => s.statusText && s.statusText !== '').length;
   const pendingCount   = specs.length - completedCount;
   const canComplete    = pendingCount === 0 && specs.length > 0;
 
-  const handleSendToChecking = async () => {
-    setSaving(true);
-    try {
-      await new Promise(r => setTimeout(r, 800));
-      showToast({ type: 'success', title: 'Sent', message: `Report ${selectedPlan.reportNo} sent for checking.` });
-      backToList();
-    } finally { setSaving(false); }
-  };
+const handleComplete = () => {
+  if (!canComplete) {
+    showToast({
+      type: 'error',
+      title: 'Incomplete',
+      message: `${pendingCount} item(s) still pending.`,
+    });
+    return;
+  }
 
-  const handleSendToApproval = async () => {
-    setSaving(true);
-    try {
-      await new Promise(r => setTimeout(r, 800));
-      showToast({ type: 'success', title: 'Sent', message: `Report ${selectedPlan.reportNo} sent for approval.` });
+  completeMutation.mutate({
+    reportNo: selectedPlan?.transId,
+    preparedBy: credentials.prepared,
+    checkedBy: credentials.checked,
+    approvedBy: credentials.approved,
+    createdBy: 3,
+  }, {
+    onSuccess: () => {
       backToList();
-    } finally { setSaving(false); }
-  };
-
-  const handleComplete = async () => {
-    if (!canComplete) {
-      showToast({ type: 'error', title: 'Incomplete', message: `${pendingCount} item(s) still pending.` });
-      return;
     }
-    setCompleting(true);
-    try {
-      await new Promise(r => setTimeout(r, 1000));
-      showToast({ type: 'success', title: 'Completed', message: `Checksheet ${selectedPlan.reportNo} closed successfully.` });
-      backToList();
-    } finally { setCompleting(false); }
-  };
+  });
+};
 
   const displayData = apiData.filter(p => {
     const statusMatch = statusFilter === 'all' || p.status === statusFilter;
@@ -167,11 +167,9 @@ const openPlan = async (plan) => {
       key: 'open', label: '', sortable: false,
       render: (_, row) => (
         <button onClick={() => openPlan(row)} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '5px 12px', borderRadius: 7,
+          display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 7,
           background: 'var(--accent-glow)', border: '1px solid rgba(79,143,255,0.2)',
-          color: 'var(--accent)', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-          transition: 'all var(--trans)',
+          color: 'var(--accent)', fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all var(--trans)',
         }}>
           <S size={12} d={<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></>}/> Open
         </button>
@@ -191,8 +189,7 @@ const openPlan = async (plan) => {
       key: 'freq', label: 'Frequency',
       render: v => (
         <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+          display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 500,
           background: v === 'Daily' ? 'var(--purple-bg)' : 'var(--accent-glow)',
           color:      v === 'Daily' ? 'var(--purple)'    : 'var(--accent)',
         }}>{v}</span>
@@ -207,10 +204,7 @@ const openPlan = async (plan) => {
     <div>
       <PageHeader title="Checksheet Entry" subtitle="Enter actual PM check results per maintenance plan"/>
       <DataTable
-        columns={columns}
-        data={displayData}
-        searchKeys={['reportNo', 'mould', 'partNo']}
-        pageSize={10}
+        columns={columns} data={displayData} searchKeys={['reportNo', 'mould', 'partNo']} pageSize={10}
         toolbar={
           <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
             <div style={{ width: 220, minWidth: 180 }}>
@@ -238,22 +232,45 @@ const openPlan = async (plan) => {
   /* ── ENTRY VIEW ── */
   return (
     <div>
-      {/* breadcrumb header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <button onClick={backToList} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '6px 14px', borderRadius: 8,
-          background: 'transparent', border: '1px solid var(--border)',
-          color: 'var(--text2)', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-          transition: 'all var(--trans)',
-        }}>
-          <S size={12} d={<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>}/> Back
+      {/* breadcrumb + Complete */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={backToList} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8,
+            background: 'transparent', border: '1px solid var(--border)',
+            color: 'var(--text2)', fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all var(--trans)',
+          }}>
+            <S size={12} d={<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>}/> Back
+          </button>
+          <div style={{ color: 'var(--text3)', fontSize: 12 }}>Checksheet Entry</div>
+          <S size={12} d={<polyline points="9 18 15 12 9 6"/>}/>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>Plan Detail</span>
+        </div>
+
+        <button
+          onClick={handleComplete}
+          disabled={!canComplete || completing}
+          title={!canComplete ? `${pendingCount} item(s) still pending` : 'Complete and close the plan'}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+            padding: '8px 20px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+            color: canComplete ? '#fff' : 'var(--text3)',
+            border: `1px solid ${canComplete ? 'transparent' : 'var(--border)'}`,
+            cursor: canComplete ? 'pointer' : 'not-allowed',
+            background: canComplete ? 'linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)' : 'var(--bg3)',
+            opacity: completing ? 0.7 : 1,
+            boxShadow: canComplete ? '0 2px 12px rgba(37,99,235,0.35)' : 'none',
+            transition: 'all 0.2s',
+          }}>
+          <S size={14} d={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>}/>
+          {completing ? 'Completing…' : 'Complete'}
+          {!canComplete && pendingCount > 0 && (
+            <span style={{
+              marginLeft: 4, fontSize: 10, fontWeight: 700, background: 'var(--bg4)',
+              borderRadius: 20, padding: '1px 7px', color: 'var(--text3)', border: '1px solid var(--border)',
+            }}>{pendingCount} left</span>
+          )}
         </button>
-        <div style={{ color: 'var(--text3)', fontSize: 12 }}>Checksheet Entry</div>
-        <S size={12} d={<polyline points="9 18 15 12 9 6"/>}/>
-        <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 5, color: 'var(--cyan)', border: '1px solid rgba(6,182,212,0.15)' }}>
-          {selectedPlan?.reportNo}
-        </code>
       </div>
 
       <PlanInfoCard plan={selectedPlan} total={specs.length} completed={completedCount} pending={pendingCount}/>
@@ -263,71 +280,41 @@ const openPlan = async (plan) => {
         <div style={{ flex: 1, height: 5, background: 'var(--bg4)', borderRadius: 3, overflow: 'hidden' }}>
           <div style={{
             width: specs.length ? `${(completedCount / specs.length) * 100}%` : '0%',
-            height: '100%', background: 'var(--accent)', borderRadius: 3,
-            transition: 'width 0.4s ease',
+            height: '100%', background: 'var(--accent)', borderRadius: 3, transition: 'width 0.4s ease',
           }}/>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text2)', flexShrink: 0 }}>
-          {completedCount}/{specs.length} filled
-        </span>
+        <span style={{ fontSize: 11, color: 'var(--text2)', flexShrink: 0 }}>{completedCount}/{specs.length} filled</span>
       </div>
 
-      {/* ── COLUMN HEADERS for spec rows ── */}
+      {/* column headers */}
       {!specsLoading && specs.length > 0 && (
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: '28px  1fr 1fr 1fr 1fr  130px auto',
-          alignItems: 'center', gap: 5,
-          padding: '6px 14px',
-          marginBottom: 2,
+          display: 'grid', gridTemplateColumns: '28px 1fr 1fr 1fr 1fr 160px auto',
+          alignItems: 'center', gap: 5, padding: '6px 14px', marginBottom: 2,
         }}>
           <span/>
           <span style={colHeaderStyle}>Check Area</span>
           <span style={colHeaderStyle}>Check Point</span>
           <span style={colHeaderStyle}>Check Method</span>
           <span style={colHeaderStyle}>Required Condition</span>
-          <span style={colHeaderStyle}>Result</span>
+          <span style={colHeaderStyle}>Status</span>
           <span style={colHeaderStyle}>Action</span>
         </div>
       )}
 
-      {/* spec rows */}
-      {specsLoading
-        ? <LoadingRows/>
-        : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {specs.map((spec, idx) => (
-              <SpecRow
-                key={spec.id}
-                spec={spec}
-                idx={idx}
-                onOpenEntry={() => openEntryModal(idx)}
-              />
-            ))}
-          </div>
-        )
-      }
+      {specsLoading ? <LoadingRows/> : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {specs.map((spec, idx) => (
+            <SpecRow key={spec.id} spec={spec} idx={idx} onOpenEntry={() => openEntryModal(idx)}/>
+          ))}
+        </div>
+      )}
 
-      {/* credentials */}
       {!specsLoading && specs.length > 0 && (
         <CredentialsBar credentials={credentials} setCredentials={setCredentials} accessRole={accessRole}/>
       )}
 
-      {/* action buttons */}
-      {!specsLoading && specs.length > 0 && (
-        <WorkflowActions
-          accessRole={accessRole}
-          canComplete={canComplete}
-          saving={saving}
-          completing={completing}
-          onSendToChecking={handleSendToChecking}
-          onSendToApproval={handleSendToApproval}
-          onComplete={handleComplete}
-          onBack={backToList}
-        />
-      )}
-
-      {/* unified entry modal */}
+      {/* ── Pass the full mutation object into the modal ── */}
       <ChecksheetEntryModal
         open={entryModalOpen}
         onClose={() => setEntryModalOpen(false)}
@@ -337,15 +324,130 @@ const openPlan = async (plan) => {
         onUpdate={(id, field, value) => updateSpecField(id, field, value)}
         onUpdateSpec={(id, fields) => setSpecs(prev => prev.map(s => s.id === id ? { ...s, ...fields } : s))}
         showToast={showToast}
+        currentStatusOptions={currentStatusOptions}
+        dropdownLoading={dropdownLoading}
+        updateMutation={updateChecksheetMutation}   /* ← the fix */
       />
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   UNIFIED CHECKSHEET ENTRY MODAL
+   SPEC REFERENCE IMAGE — display only
 ══════════════════════════════════════════════════════════════════════════════ */
-function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx, onUpdate, onUpdateSpec, showToast }) {
+function SpecReferenceImage({ specImage }) {
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => { setImgError(false); }, [specImage]);
+
+  const apiFileName = extractFileName(specImage);
+  const src         = resolveImgSrc(specImage);
+
+  const SectionLabel = (
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>
+      Spec Reference Image
+    </div>
+  );
+
+  const FileNameBadge = apiFileName ? (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
+      padding: '3px 9px', borderRadius: 5,
+      background: 'var(--bg4)', border: '1px solid var(--border)',
+      fontSize: 10, color: 'var(--text3)', fontFamily: "'Geist Mono',monospace",
+    }}>
+      <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
+      {apiFileName}
+    </div>
+  ) : null;
+
+  if (!specImage) {
+    return (
+      <div style={{ padding: '14px 18px 0' }}>
+        {SectionLabel}
+        <div style={{
+          height: 100, borderRadius: 10,
+          border: '1px dashed var(--border2)', background: 'var(--bg3)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <svg width={30} height={30} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text3)', opacity: 0.4 }}>
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+            <line x1="1" y1="1" x2="23" y2="23" stroke="var(--red)" strokeWidth={1.2} opacity={0.35}/>
+          </svg>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)' }}>No Image Configured</div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 2, opacity: 0.7 }}>Set the spec image from the Spec Entry page</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (src && !imgError) {
+    return (
+      <div style={{ padding: '14px 18px 0' }}>
+        {SectionLabel}
+        {FileNameBadge}
+        <div style={{ borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--bg3)' }}>
+          <img src={src} alt="Spec reference"
+            style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }}
+            onError={() => setImgError(true)}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '14px 18px 0' }}>
+      {SectionLabel}
+      {FileNameBadge}
+      <div style={{
+        borderRadius: 10, border: '1px dashed rgba(239,68,68,0.35)',
+        background: 'rgba(239,68,68,0.04)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 8, padding: '18px 16px',
+      }}>
+        <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ef4444', opacity: 0.6 }}>
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+          <line x1="1" y1="1" x2="23" y2="23" stroke="#ef4444" strokeWidth={1.2}/>
+        </svg>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#ef4444' }}>Image Not Found</div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 4, lineHeight: 1.6 }}>
+            Place the file at:&nbsp;
+            <code style={{ background: 'var(--bg4)', padding: '1px 6px', borderRadius: 3, fontFamily: "'Geist Mono',monospace", fontSize: 9 }}>
+              public{IMAGE_BASE_PATH}{apiFileName}
+            </code>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2, opacity: 0.7 }}>Update from the Spec Entry page</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   UNIFIED CHECKSHEET ENTRY MODAL
+
+   KEY FIX: receives `updateMutation` (the full TanStack mutation object) from
+   the parent. Calls updateMutation.mutate(payload, { onSuccess }) directly.
+   isPending drives the button loading state — no local `saving` state needed.
+══════════════════════════════════════════════════════════════════════════════ */
+function ChecksheetEntryModal({
+  open, onClose, specs, currentIdx, setCurrentIdx,
+  onUpdate, onUpdateSpec, showToast,
+  currentStatusOptions, dropdownLoading,
+  updateMutation,      // ← { mutate, isPending } from useUpdateChecksheet()
+}) {
   if (!open || specs.length === 0) return null;
 
   const spec = specs[currentIdx];
@@ -355,297 +457,225 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
   const isFirst = currentIdx === 0;
   const isLast  = currentIdx === total - 1;
 
-  /* Derive result from currentStatusDropdown for display in modal header */
-  const derivedResult = deriveResult(spec.currentStatusDropdown);
-  const filled  = !!derivedResult;
-  const isGood  = derivedResult === 'OK';
-  const isBad   = derivedResult === 'NG';
+  const statusText = spec.statusText || '';
+  const filled     = statusText.trim() !== '';
+  const saving     = updateMutation?.isPending ?? false;
 
   const goNext = () => { if (!isLast)  setCurrentIdx(i => i + 1); };
   const goPrev = () => { if (!isFirst) setCurrentIdx(i => i - 1); };
 
+  /* When dropdown changes → find the label and populate statusText */
+const handleStatusDropdownChange = (val) => {
+  const selected = currentStatusOptions.find(o => o.value === val);
+
+  onUpdateSpec(spec.id, {
+    currentStatusDropdown: val,
+    statusText: selected?.label || '',
+    statusType: selected?.type || ''
+  });
+};
+
+  const handleStatusTextChange = (val) => {
+    onUpdate(spec.id, 'statusText', val);
+  };
+
+  /* Store dataURL (preview) + raw File object (for API) + filename (display) */
   const handleImgUpload = (field, file) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = e => onUpdate(spec.id, field, e.target.result);
+    reader.onload = e => {
+      onUpdateSpec(spec.id, {
+        [field]:           e.target.result,   // dataURL → <img> preview
+        [`${field}Name`]:  file.name,         // display badge
+        [`${field}File`]:  file,              // raw File → multipart binary
+      });
+    };
     reader.readAsDataURL(file);
   };
 
-  const handleClearImg = (field) => onUpdate(spec.id, field, null);
-
-  const handleSaveAndNext = () => {
-    showToast({ type: 'success', title: 'Saved', message: `${spec.area} updated.` });
-    if (!isLast) goNext();
-    else onClose();
+  const handleClearImg = (field) => {
+    onUpdateSpec(spec.id, {
+      [field]: null, [`${field}Name`]: null, [`${field}File`]: null,
+    });
   };
+
+  /* ── SAVE ────────────────────────────────────────────────────────────────
+     The payload shape matches what updateChecksheet() in checksheet.js
+     expects — it builds the FormData there, so we just pass plain fields.
+     API: POST /api/Mold/UpdateCheckSheet  (multipart/form-data)
+       TransId        integer
+       CurrentStatus  string
+       ActionTaken    string
+       BeforeImage    binary (File)
+       AfterImage     binary (File)
+       Remarks        string
+  ─────────────────────────────────────────────────────────────────────── */
+const handleSaveAndNext = () => {
+  const currentSpec = specs[currentIdx];
+
+  if (!currentSpec.statusText?.trim()) {
+    showToast({ type: 'error', title: 'Required', message: 'Please set a Current Status before saving.' });
+    return;
+  }
+
+  updateMutation.mutate({
+    transId:          currentSpec.transId ?? currentSpec.id,
+    statusText:       currentSpec.statusText       ?? '',
+    correctiveAction: currentSpec.correctiveAction ?? '',
+    remarks:          currentSpec.remarks          ?? '',
+    beforeImgFile:    currentSpec.beforeImgFile instanceof File ? currentSpec.beforeImgFile : undefined,
+    afterImgFile:     currentSpec.afterImgFile  instanceof File ? currentSpec.afterImgFile  : undefined,
+  }, {
+    onSuccess: (res) => {
+      // ✅ Persist the saved image URLs back into local spec state
+      // so the thumbnail shows the server path, not just the dataURL
+      onUpdateSpec(currentSpec.id, {
+        beforeImg:     res?.beforeImg  ?? currentSpec.beforeImg,
+        afterImg:      res?.afterImg   ?? currentSpec.afterImg,
+        beforeImgFile: undefined,   // clear the raw File — already uploaded
+        afterImgFile:  undefined,
+      });
+
+      if (!isLast) goNext();
+      else         onClose();
+    },
+  });
+};
 
   const handleClearRow = () => {
-    onUpdateSpec(spec.id, { currentStatusDropdown: '', correctiveAction: '', remarks: '', beforeImg: null, afterImg: null });
+    onUpdateSpec(spec.id, {
+      currentStatusDropdown: '', statusText:       '',
+      correctiveAction:      '', remarks:          '',
+      beforeImg:  null, beforeImgName:  null, beforeImgFile:  null,
+      afterImg:   null, afterImgName:   null, afterImgFile:   null,
+    });
   };
 
-  /* status color theme for top header gradient */
-  const headerBorderColor = filled
-    ? isGood ? 'rgba(34,197,94,0.25)' : isBad ? 'rgba(239,68,68,0.25)' : 'var(--border)'
-    : 'var(--border)';
-
-  const headerAccentBg = filled
-    ? isGood ? 'rgba(34,197,94,0.06)' : isBad ? 'rgba(239,68,68,0.06)' : 'var(--bg3)'
-    : 'var(--bg3)';
+  const headerBorderColor = filled ? 'rgba(79,143,255,0.25)' : 'var(--border)';
+  const headerAccentBg    = filled ? 'rgba(79,143,255,0.06)' : 'var(--bg3)';
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title=""
-      size="xl"
-      footer={null}
-    >
+    <Modal open={open} onClose={onClose} title="" size="xl" footer={null}>
       <style>{`
-        @keyframes cs-slide-in {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes cs-slide-in { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
         .cs-anim { animation: cs-slide-in 0.22s ease; }
+        .cs-nav-btn:hover:not(:disabled) { background: var(--bg4) !important; color: var(--text) !important; }
         .cs-img-drop:hover { border-color: var(--accent) !important; background: var(--accent-glow) !important; }
         .cs-img-drop:hover .cs-img-icon { color: var(--accent) !important; }
-        .cs-nav-btn:hover:not(:disabled) { background: var(--bg4) !important; color: var(--text) !important; }
       `}</style>
 
       <div className="cs-anim" key={spec.id} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
 
-        {/* ══════════════════════════════════════════════════
-            TOP HEADER — Nav + 2×2 spec info grid
-        ══════════════════════════════════════════════════ */}
+        {/* ── TOP HEADER ── */}
         <div style={{
-          background: headerAccentBg,
-          border: `1px solid ${headerBorderColor}`,
-          borderRadius: 10,
-          margin: '-8px -8px 0 -8px',
-          overflow: 'hidden',
+          background: headerAccentBg, border: `1px solid ${headerBorderColor}`,
+          borderRadius: 10, margin: '-8px -8px 0 -8px', overflow: 'hidden',
         }}>
-
           {/* nav row */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 16px',
-            borderBottom: `1px solid ${headerBorderColor}`,
+            padding: '12px 16px', borderBottom: `1px solid ${headerBorderColor}`,
           }}>
-            {/* prev */}
-            <button
-              className="cs-nav-btn"
-              onClick={goPrev} disabled={isFirst}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 12px', borderRadius: 8,
-                background: 'transparent', border: '1px solid var(--border)',
-                color: isFirst ? 'var(--text3)' : 'var(--text2)',
-                fontSize: 12, fontWeight: 500, cursor: isFirst ? 'not-allowed' : 'pointer',
-                opacity: isFirst ? 0.4 : 1, transition: 'all 0.15s',
-              }}>
+            <button className="cs-nav-btn" onClick={goPrev} disabled={isFirst} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+              background: 'transparent', border: '1px solid var(--border)',
+              color: isFirst ? 'var(--text3)' : 'var(--text2)', fontSize: 12, fontWeight: 500,
+              cursor: isFirst ? 'not-allowed' : 'pointer', opacity: isFirst ? 0.4 : 1, transition: 'all 0.15s',
+            }}>
               <S size={12} d={<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>}/>
               Prev
             </button>
 
-            {/* center: item counter + derived result badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px',
-                color: 'var(--text3)', fontFamily: "'Geist Mono',monospace",
-              }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text3)', fontFamily: "'Geist Mono',monospace" }}>
                 Item {currentIdx + 1} of {total}
               </span>
               {filled && (
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
-                  background: RES_BG[derivedResult],
-                  color: RES_COLOR[derivedResult],
-                  border: `1px solid ${RES_COLOR[derivedResult]}44`,
+                  fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 20,
+                  background: 'rgba(79,143,255,0.12)', color: 'var(--accent)', border: '1px solid rgba(79,143,255,0.3)',
                 }}>
-                  {derivedResult}
+                  {statusText}
                 </span>
               )}
             </div>
 
-            {/* next */}
-            <button
-              className="cs-nav-btn"
-              onClick={goNext} disabled={isLast}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 12px', borderRadius: 8,
-                background: 'transparent', border: '1px solid var(--border)',
-                color: isLast ? 'var(--text3)' : 'var(--text2)',
-                fontSize: 12, fontWeight: 500, cursor: isLast ? 'not-allowed' : 'pointer',
-                opacity: isLast ? 0.4 : 1, transition: 'all 0.15s',
-              }}>
+            <button className="cs-nav-btn" onClick={goNext} disabled={isLast} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8,
+              background: 'transparent', border: '1px solid var(--border)',
+              color: isLast ? 'var(--text3)' : 'var(--text2)', fontSize: 12, fontWeight: 500,
+              cursor: isLast ? 'not-allowed' : 'pointer', opacity: isLast ? 0.4 : 1, transition: 'all 0.15s',
+            }}>
               Next
               <S size={12} d={<><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>}/>
             </button>
           </div>
 
-          {/* ── 2×2 spec info grid ── */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 0,
-            padding: '14px 16px 16px',
-          }}>
-            {/* LEFT col: Check Area + Check Point */}
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: 10,
-              paddingRight: 16,
-              borderRight: `1px solid ${headerBorderColor}`,
-            }}>
-              <div>
-                <div style={specLabelStyle}>Check Area</div>
-                <div style={specValueStyle}>{spec.area}</div>
-              </div>
-              <div>
-                <div style={specLabelStyle}>Check Point</div>
-                <div style={specValueStyle}>{spec.point}</div>
-              </div>
+          {/* 2×2 spec info grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, padding: '14px 16px 16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 16, borderRight: `1px solid ${headerBorderColor}` }}>
+              <ModalInfoField label="Check Area"  value={spec.area}  color="#3b82f6"/>
+              <ModalInfoField label="Check Point" value={spec.point} color="#8b5cf6"/>
             </div>
-
-            {/* RIGHT col: Check Method + Required Condition */}
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: 10,
-              paddingLeft: 16,
-            }}>
-              <div>
-                <div style={specLabelStyle}>Check Method</div>
-                <div style={specValueStyle}>{spec.method}</div>
-              </div>
-              <div>
-                <div style={specLabelStyle}>Required Condition</div>
-                <div style={{ ...specValueStyle, wordBreak: 'break-word', lineHeight: 1.5 }}>{spec.condition}</div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 16 }}>
+              <ModalInfoField label="Check Method"       value={spec.method}    color="#06b6d4"/>
+              <ModalInfoField label="Required Condition" value={spec.condition} color="#f59e0b"/>
             </div>
           </div>
         </div>
 
-        {/* ── SPEC MINI-NAVIGATOR (dots) ── */}
+        {/* dot navigator */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 5, padding: '14px 18px 0' }}>
           {specs.map((s, i) => {
-            const dr      = deriveResult(s.currentStatusDropdown);
-            const isDone  = !!dr;
-            const isGoodS = dr === 'OK';
-            const isBadS  = dr === 'NG';
+            const isDone = !!(s.statusText && s.statusText.trim() !== '');
             return (
-              <button
-                key={s.id}
-                onClick={() => setCurrentIdx(i)}
-                title={`${i + 1}. ${s.area} — ${s.point}${isDone ? ` — ${dr}` : ' — Pending'}`}
+              <button key={s.id} onClick={() => setCurrentIdx(i)}
+                title={`${i + 1}. ${s.area} — ${isDone ? s.statusText : 'Pending'}`}
                 style={{
-                  width: i === currentIdx ? 20 : 8,
-                  height: 8, borderRadius: 4, border: 'none', cursor: 'pointer',
-                  transition: 'all 0.25s ease',
-                  background: i === currentIdx
-                    ? 'var(--accent)'
-                    : isDone
-                      ? isGoodS ? 'var(--green)' : isBadS ? 'var(--red)' : 'var(--text3)'
-                      : 'var(--bg4)',
-                  padding: 0,
-                  flexShrink: 0,
+                  width: i === currentIdx ? 20 : 8, height: 8, borderRadius: 4,
+                  border: 'none', cursor: 'pointer', transition: 'all 0.25s ease', padding: 0, flexShrink: 0,
+                  background: i === currentIdx ? 'var(--accent)' : isDone ? 'var(--green)' : 'var(--bg4)',
                 }}
               />
             );
           })}
         </div>
 
-        {/* ── SPEC IMAGE (from API) ── */}
-        <div style={{ padding: '14px 18px 0' }}>
-          <div style={{
-            fontSize: 11, fontWeight: 700, color: 'var(--text3)',
-            textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8,
-          }}>
-            Spec Reference Image
-          </div>
-          {spec.specImage ? (
-            <div style={{
-              borderRadius: 10, overflow: 'hidden',
-              border: '1px solid var(--border)',
-              background: 'var(--bg3)',
-              maxHeight: 200,
-            }}>
-              <img
-                src={spec.specImage}
-                alt="Spec reference"
-                style={{ width: '100%', maxHeight: 200, objectFit: 'cover', display: 'block' }}
-              />
-            </div>
-          ) : (
-            <div style={{
-              height: 100, borderRadius: 10,
-              border: '1px dashed var(--border2)',
-              background: 'var(--bg3)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 8,
-            }}>
-              <svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round"
-                style={{ color: 'var(--text3)', opacity: 0.5 }}>
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
-                <line x1="1" y1="1" x2="23" y2="23" stroke="var(--red)" strokeWidth={1.2} opacity={0.4}/>
-              </svg>
-              <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 500 }}>No Image Available</span>
-            </div>
-          )}
-        </div>
+        {/* Spec Reference Image — display only */}
+        <SpecReferenceImage specImage={spec.specImage}/>
 
-        {/* ── DIVIDER ── */}
+        {/* divider */}
         <div style={{ height: 1, background: 'var(--border)', margin: '16px 18px 0' }}/>
 
         {/* ── CURRENT STATUS ── */}
         <div style={{ padding: '16px 18px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-              Current Status *
-            </div>
-            <button
-              title="Add new status"
-              style={{
-                width: 22, height: 22, borderRadius: 6,
-                border: '1px solid var(--border)',
-                background: 'var(--bg3)', color: 'var(--text2)',
-                cursor: 'pointer', fontSize: 14, fontWeight: 700, lineHeight: '18px',
-              }}
-              onClick={() => alert('Add new status (later API)')}
-            >
-              +
-            </button>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+            Current Status *
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <select
+            <SearchableSelect
+              options={currentStatusOptions}
               value={spec.currentStatusDropdown || ''}
-              onChange={(e) => onUpdate(spec.id, 'currentStatusDropdown', e.target.value)}
-              style={{ ...inputStyle, height: 34 }}
-            >
-              <option value="">Select Status</option>
-              {currentStatusList.map((s) => (
-                <option key={s.Id} value={s.CurrentStatus}>{s.CurrentStatus}</option>
-              ))}
-            </select>
-            {/* Read-only derived result pill */}
-            <div style={{
-              display: 'flex', alignItems: 'center',
-              height: 34, padding: '0 10px', borderRadius: 7,
-              background: derivedResult ? RES_BG[derivedResult] : 'var(--bg3)',
-              border: `1px solid ${derivedResult ? RES_COLOR[derivedResult] + '55' : 'var(--border2)'}`,
-              fontSize: 13, fontWeight: 700,
-              color: derivedResult ? RES_COLOR[derivedResult] : 'var(--text3)',
-              transition: 'all 0.2s',
-              userSelect: 'none',
-            }}>
-              {derivedResult
-                ? <>{derivedResult === 'OK' ? '✓ ' : '✗ '}{derivedResult}</>
-                : <span style={{ fontWeight: 400, fontSize: 12 }}>Result auto-fills</span>
-              }
-            </div>
+              onChange={handleStatusDropdownChange}
+              placeholder={dropdownLoading ? 'Loading…' : 'Select Status'}
+              disabled={dropdownLoading}
+            />
+            <input
+              value={statusText}
+              onChange={e => handleStatusTextChange(e.target.value)}
+              placeholder="Status text (auto-filled or type)"
+              style={{
+                ...inputStyle, height: 34,
+                background:  statusText ? 'rgba(79,143,255,0.07)' : 'var(--bg2)',
+                borderColor: statusText ? 'rgba(79,143,255,0.4)'  : 'var(--border2)',
+                color:       statusText ? 'var(--accent)' : 'var(--text)',
+                fontWeight:  statusText ? 600 : 400,
+                transition: 'all 0.2s',
+              }}
+            />
           </div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6 }}>
-            Select the current workflow status. Result is derived automatically.
+            Select from dropdown to auto-fill, or type the status directly.
           </div>
         </div>
 
@@ -653,21 +683,15 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: '16px 18px 0' }}>
           <div>
             <label style={labelStyle}>Corrective Action</label>
-            <textarea
-              value={spec.correctiveAction ?? ''}
-              onChange={e => onUpdate(spec.id, 'correctiveAction', e.target.value)}
-              placeholder="Describe the corrective action taken…"
-              rows={3}
+            <textarea value={spec.correctiveAction ?? ''} onChange={e => onUpdate(spec.id, 'correctiveAction', e.target.value)}
+              placeholder="Describe the corrective action taken…" rows={3}
               style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
             />
           </div>
           <div>
             <label style={labelStyle}>Remarks &amp; Spare Usage</label>
-            <textarea
-              value={spec.remarks ?? ''}
-              onChange={e => onUpdate(spec.id, 'remarks', e.target.value)}
-              placeholder="Remarks, spare parts consumed…"
-              rows={3}
+            <textarea value={spec.remarks ?? ''} onChange={e => onUpdate(spec.id, 'remarks', e.target.value)}
+              placeholder="Remarks, spare parts consumed…" rows={3}
               style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
             />
           </div>
@@ -678,6 +702,7 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
           <ImageUploadField
             label="Before Image"
             value={spec.beforeImg}
+            apiImgName={spec.beforeImgName ?? extractFileName(spec.beforeImg)}
             onChange={file => handleImgUpload('beforeImg', file)}
             onClear={() => handleClearImg('beforeImg')}
             accent="rgba(251,146,60,0.7)"
@@ -686,6 +711,7 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
           <ImageUploadField
             label="After Image"
             value={spec.afterImg}
+            apiImgName={spec.afterImgName ?? extractFileName(spec.afterImg)}
             onChange={file => handleImgUpload('afterImg', file)}
             onClear={() => handleClearImg('afterImg')}
             accent="rgba(34,197,94,0.7)"
@@ -696,43 +722,36 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
         {/* ── BOTTOM ACTION BAR ── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '18px 18px 4px', marginTop: 8,
-          borderTop: '1px solid var(--border)',
+          padding: '18px 18px 4px', marginTop: 8, borderTop: '1px solid var(--border)',
         }}>
-          <button
-            onClick={handleClearRow}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '7px 14px', borderRadius: 8,
-              background: 'transparent', border: '1px solid var(--border)',
-              color: 'var(--text3)', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}>
+          <button onClick={handleClearRow} disabled={saving} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8,
+            background: 'transparent', border: '1px solid var(--border)',
+            color: 'var(--text3)', fontSize: 12, fontWeight: 500,
+            cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.4 : 1, transition: 'all 0.15s',
+          }}>
             <S size={12} d={<><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/></>}/>
             Clear
           </button>
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={onClose}
-              style={{
-                padding: '7px 16px', borderRadius: 8,
-                background: 'transparent', border: '1px solid var(--border)',
-                color: 'var(--text2)', fontSize: 12, fontWeight: 500, cursor: 'pointer',
-              }}>
+            <button onClick={onClose} disabled={saving} style={{
+              padding: '7px 16px', borderRadius: 8, background: 'transparent',
+              border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 12, fontWeight: 500,
+              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1,
+            }}>
               Close
             </button>
-            <button
-              onClick={handleSaveAndNext}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '7px 18px', borderRadius: 8,
-                background: 'var(--accent)', border: 'none',
-                color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                transition: 'opacity 0.15s',
-              }}>
-              <S size={12} d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>}/>
-              {isLast ? 'Save & Close' : 'Save & Next →'}
+            <button onClick={handleSaveAndNext} disabled={saving} style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 18px', borderRadius: 8,
+              background: saving ? 'var(--bg4)' : 'var(--accent)', border: 'none',
+              color: saving ? 'var(--text3)' : '#fff', fontSize: 12, fontWeight: 600,
+              cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.15s', minWidth: 120,
+            }}>
+              {saving
+                ? <><LoadingSpinner size={12}/>&nbsp;Saving…</>
+                : <><S size={12} d={<><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></>}/>{isLast ? 'Save & Close' : 'Save & Next →'}</>
+              }
             </button>
           </div>
         </div>
@@ -742,19 +761,37 @@ function ChecksheetEntryModal({ open, onClose, specs, currentIdx, setCurrentIdx,
   );
 }
 
+/* ── Colored label chip for modal spec info ── */
+function ModalInfoField({ label, value, color }) {
+  return (
+    <div>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 8px', borderRadius: 5, marginBottom: 5,
+        background: `${color}18`, border: `1px solid ${color}40`,
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: 2, background: color, flexShrink: 0, display: 'inline-block' }}/>
+        <span style={{ fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', lineHeight: 1.5, wordBreak: 'break-word' }}>{value}</div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════
-   IMAGE UPLOAD FIELD
+   IMAGE UPLOAD FIELD  (Before / After)
 ══════════════════════════════════════════════════════════════════════════════ */
-function ImageUploadField({ label, value, onChange, onClear, accent = 'var(--accent)', accentBg = 'var(--accent-glow)' }) {
+function ImageUploadField({ label, value, apiImgName, onChange, onClear, accent = 'var(--accent)', accentBg = 'var(--accent-glow)' }) {
   const inputRef   = useRef(null);
   const [dragging, setDragging] = useState(false);
-  const [loading,  setLoading]  = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => { setImgError(false); }, [value]);
 
   const handleFile = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) return;
-    setLoading(true);
+    setImgError(false);
     onChange(file);
-    setLoading(false);
   }, [onChange]);
 
   const onDrop = (e) => {
@@ -763,35 +800,99 @@ function ImageUploadField({ label, value, onChange, onClear, accent = 'var(--acc
     if (file) handleFile(file);
   };
 
-  const labelTag = (
-    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+  const previewSrc  = resolveImgSrc(value);
+  const displayName = apiImgName || extractFileName(value);
+
+  const LabelRow = (
+    <div style={{
+      fontSize: 11, fontWeight: 700, color: 'var(--text3)',
+      textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8,
+      display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+    }}>
       <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: accent }}/>
       {label}
+      {displayName && (
+        <span style={{
+          fontSize: 10, color: 'var(--text3)', fontWeight: 400,
+          fontFamily: "'Geist Mono',monospace",
+          background: 'var(--bg4)', border: '1px solid var(--border)',
+          padding: '1px 6px', borderRadius: 4,
+        }}>
+          {displayName}
+        </span>
+      )}
     </div>
   );
 
-  if (value) {
+  /* Case A: no value → drop zone */
+  if (!value && !apiImgName) {
     return (
       <div>
-        {labelTag}
-        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: `1px solid ${accent}44`, background: 'var(--bg3)' }}>
-          <img src={value} alt={label} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}/>
-          <div style={{
-            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex',
-            alignItems: 'flex-end', justifyContent: 'flex-end', gap: 6, padding: 8,
-            transition: 'background 0.2s',
+        {LabelRow}
+        <div className="cs-img-drop"
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            height: 160, borderRadius: 10, cursor: 'pointer',
+            border: `2px dashed ${dragging ? accent : 'var(--border2)'}`,
+            background: dragging ? accentBg : 'var(--bg3)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 10, transition: 'all 0.2s ease',
           }}
+        >
+          <div className="cs-img-icon" style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: dragging ? accentBg : 'var(--bg4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: dragging ? accent : 'var(--text3)', transition: 'all 0.2s',
+            border: `1px solid ${dragging ? accent + '44' : 'var(--border)'}`,
+          }}>
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
+              Drop image here or <span style={{ color: accent, textDecoration: 'underline' }}>browse</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>PNG, JPG, WEBP up to 10MB</div>
+          </div>
+        </div>
+        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
+          onChange={e => { if (e.target.files[0]) handleFile(e.target.files[0]); e.target.value = ''; }}
+        />
+      </div>
+    );
+  }
+
+  /* Case B: has src + no error → thumbnail */
+  if (previewSrc && !imgError) {
+    return (
+      <div>
+        {LabelRow}
+        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: `1px solid ${accent}44`, background: 'var(--bg3)' }}>
+          <img src={previewSrc} alt={label}
+            style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }}
+            onError={() => setImgError(true)}
+          />
+          <div
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', gap: 6, padding: 8, transition: 'background 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.45)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,0,0,0)'}
           >
-            <button
-              onClick={() => inputRef.current?.click()}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.92)', border: 'none', cursor: 'pointer', color: '#111' }}>
+            <button onClick={() => inputRef.current?.click()} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+              fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.92)', border: 'none', cursor: 'pointer', color: '#111',
+            }}>
               <S size={11} d={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>}/> Replace
             </button>
-            <button
-              onClick={onClear}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, fontSize: 11, fontWeight: 600, background: 'rgba(239,68,68,0.9)', border: 'none', cursor: 'pointer', color: '#fff' }}>
+            <button onClick={onClear} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+              fontSize: 11, fontWeight: 600, background: 'rgba(239,68,68,0.9)', border: 'none', cursor: 'pointer', color: '#fff',
+            }}>
               <S size={11} d={<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></>}/> Remove
             </button>
           </div>
@@ -803,41 +904,50 @@ function ImageUploadField({ label, value, onChange, onClear, accent = 'var(--acc
     );
   }
 
+  /* Case C: has filename but file missing locally → error + compact upload */
   return (
     <div>
-      {labelTag}
-      <div
-        className="cs-img-drop"
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => inputRef.current?.click()}
-        style={{
-          height: 160, borderRadius: 10, cursor: 'pointer',
-          border: `2px dashed ${dragging ? accent : 'var(--border2)'}`,
-          background: dragging ? accentBg : 'var(--bg3)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 10, transition: 'all 0.2s ease',
-        }}
-      >
-        <div className="cs-img-icon" style={{
-          width: 40, height: 40, borderRadius: 10,
-          background: dragging ? accentBg : 'var(--bg4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: dragging ? accent : 'var(--text3)',
-          transition: 'all 0.2s',
-          border: `1px solid ${dragging ? accent + '44' : 'var(--border)'}`,
-        }}>
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
+      {LabelRow}
+      <div style={{
+        borderRadius: 10, border: '1px dashed rgba(239,68,68,0.35)',
+        background: 'rgba(239,68,68,0.04)', padding: '12px 14px',
+        display: 'flex', flexDirection: 'column', gap: 10,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 11, color: '#ef4444', lineHeight: 1.5 }}>
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
-            Drop image here or <span style={{ color: accent, textDecoration: 'underline' }}>browse</span>
+          <div>
+            File not found locally.
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>
+              Place it at:&nbsp;
+              <code style={{ background: 'var(--bg4)', padding: '1px 5px', borderRadius: 3 }}>
+                public{IMAGE_BASE_PATH}{displayName || '<filename>'}
+              </code>
+              &nbsp;or upload a replacement.
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>PNG, JPG, WEBP up to 10MB</div>
+        </div>
+        <div className="cs-img-drop"
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          style={{
+            height: 72, borderRadius: 8, cursor: 'pointer',
+            border: `2px dashed ${dragging ? accent : 'var(--border2)'}`,
+            background: dragging ? accentBg : 'var(--bg3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text3)' }}>
+            <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+          </svg>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)' }}>
+            Drop or <span style={{ color: accent, textDecoration: 'underline' }}>browse</span> to upload
+          </span>
         </div>
       </div>
       <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }}
@@ -848,84 +958,47 @@ function ImageUploadField({ label, value, onChange, onClear, accent = 'var(--acc
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   SPEC ROW — Result is read-only, derived from currentStatusDropdown
+   SPEC ROW
 ══════════════════════════════════════════════════════════════════════════════ */
 function SpecRow({ spec, idx, onOpenEntry }) {
-  /* Derive result — read-only, no setter */
-  const val    = deriveResult(spec.currentStatusDropdown);
-  const col    = val ? RES_COLOR[val] : undefined;
-  const bg     = val ? RES_BG[val]   : undefined;
-  const isGood = val === 'OK'   || val === 'Pass';
-  const isBad  = val === 'NG'   || val === 'Fail';
-  const filled = !!val;
-  const hasExtra = spec.correctiveAction || spec.remarks || spec.beforeImg || spec.afterImg;
+  const statusText = spec.statusText || '';
+  const filled     = statusText.trim() !== '';
+  const hasExtra   = spec.correctiveAction || spec.remarks || spec.beforeImg || spec.afterImg;
 
   return (
     <div style={{
-      display: 'grid',
-      gridTemplateColumns: '28px 1fr 1fr 1fr 1fr 130px auto',
-      alignItems: 'center', gap: 12,
-      padding: '11px 14px', borderRadius: 9,
-      background: filled ? (isGood ? 'rgba(34,197,94,0.04)' : isBad ? 'rgba(239,68,68,0.04)' : 'var(--bg3)') : 'var(--bg3)',
-      border: `1px solid ${filled ? (isGood ? 'rgba(34,197,94,0.18)' : isBad ? 'rgba(239,68,68,0.18)' : 'var(--border)') : 'var(--border)'}`,
+      display: 'grid', gridTemplateColumns: '28px 1fr 1fr 1fr 1fr 160px auto',
+      alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 9,
+      background: filled ? 'rgba(79,143,255,0.04)' : 'var(--bg3)',
+      border: `1px solid ${filled ? 'rgba(79,143,255,0.2)' : 'var(--border)'}`,
       transition: 'all var(--trans)',
     }}>
-      {/* index */}
-      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: "'Geist Mono',monospace" }}>
-        {idx + 1}
-      </span>
-
-      {/* check area */}
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: "'Geist Mono',monospace" }}>{idx + 1}</span>
       <div>
         <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
           {spec.area}
-          {hasExtra && (
-            <span title="Has additional details" style={{
-              width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0,
-            }}/>
-          )}
+          {hasExtra && <span title="Has additional details" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }}/>}
         </div>
       </div>
-
-      {/* check point */}
-      <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-        {spec.point}
-      </div>
-
-      {/* method */}
+      <div style={{ fontSize: 12, color: 'var(--text2)' }}>{spec.point}</div>
       <span style={{ fontSize: 12, color: 'var(--text2)' }}>{spec.method}</span>
-
-      {/* condition */}
       <span style={{ fontSize: 12, color: 'var(--text2)' }}>{spec.condition}</span>
-
-      {/* read-only derived result pill */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: 34, borderRadius: 7,
-        background: filled ? bg : 'var(--bg2)',
-        border: `1px solid ${col ? col + '55' : 'var(--border2)'}`,
-        fontSize: 12, fontWeight: 700,
-        color: col || 'var(--text3)',
-        userSelect: 'none',
-        transition: 'all var(--trans)',
+        height: 34, borderRadius: 7, padding: '0 10px',
+        background: filled ? 'rgba(79,143,255,0.10)' : 'var(--bg2)',
+        border: `1px solid ${filled ? 'rgba(79,143,255,0.3)' : 'var(--border2)'}`,
+        fontSize: 12, fontWeight: filled ? 600 : 400,
+        color: filled ? 'var(--accent)' : 'var(--text3)',
+        userSelect: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
-        {filled
-          ? <>{isGood ? '✓ ' : '✗ '}{val}</>
-          : <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text3)' }}>—</span>
-        }
+        {filled ? statusText : <span style={{ fontSize: 11 }}>—</span>}
       </div>
-
-      {/* open entry button */}
-      <button
-        onClick={onOpenEntry}
-        title="Open detailed entry"
-        style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          padding: '6px 12px', borderRadius: 7, whiteSpace: 'nowrap',
-          background: 'var(--accent-glow)', border: '1px solid rgba(79,143,255,0.2)',
-          color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-          transition: 'all var(--trans)',
-        }}>
+      <button onClick={onOpenEntry} title="Open detailed entry" style={{
+        display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, whiteSpace: 'nowrap',
+        background: 'var(--accent-glow)', border: '1px solid rgba(79,143,255,0.2)',
+        color: 'var(--accent)', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all var(--trans)',
+      }}>
         <S size={11} d={<><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>}/>
         Entry
       </button>
@@ -934,12 +1007,37 @@ function SpecRow({ spec, idx, onOpenEntry }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   REMAINING SUB-COMPONENTS
+   PLAN INFO CARD
 ══════════════════════════════════════════════════════════════════════════════ */
+const PLAN_FIELD_COLORS = {
+  'Report No':   { color: '#06b6d4', bg: 'rgba(6,182,212,0.10)',  border: 'rgba(6,182,212,0.25)'  },
+  'Mould':       { color: '#8b5cf6', bg: 'rgba(139,92,246,0.10)', border: 'rgba(139,92,246,0.25)' },
+  'Part No':     { color: '#3b82f6', bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.25)' },
+  'Frequency':   { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.25)' },
+  'Target Date': { color: '#10b981', bg: 'rgba(16,185,129,0.10)', border: 'rgba(16,185,129,0.25)' },
+  'Status':      { color: '#ef4444', bg: 'rgba(239,68,68,0.10)',  border: 'rgba(239,68,68,0.25)'  },
+};
+
+function PlanInfoField({ label, value }) {
+  const theme = PLAN_FIELD_COLORS[label] || { color: 'var(--accent)', bg: 'var(--accent-glow)', border: 'var(--border)' };
+  return (
+    <div style={{ padding: '10px 14px', borderRadius: 9, background: theme.bg, border: `1px solid ${theme.border}` }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: theme.color, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 5 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4 }}>
+        {label === 'Report No'
+          ? <code style={{ fontFamily: "'Geist Mono',monospace", fontSize: 12, color: theme.color }}>{value}</code>
+          : value}
+      </div>
+    </div>
+  );
+}
 
 function PlanInfoCard({ plan, total, completed, pending }) {
   if (!plan) return null;
   const fields = [
+    ['Report No',   plan.reportNo],
     ['Mould',       plan.mould],
     ['Part No',     plan.partNo],
     ['Frequency',   plan.freq],
@@ -947,33 +1045,41 @@ function PlanInfoCard({ plan, total, completed, pending }) {
     ['Status',      plan.status],
   ];
   return (
-    <div style={{ background: 'var(--bg3)', borderRadius: 12, padding: 18, marginBottom: 12, border: '1px solid var(--border)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Mould PM Checksheet</span>
-        <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
-          <span style={{ color: 'var(--text3)' }}>Total: <b style={{ color: 'var(--text)' }}>{total}</b></span>
-          <span style={{ color: 'var(--green)' }}>Completed: <b>{completed}</b></span>
-          <span style={{ color: pending > 0 ? 'var(--red)' : 'var(--text3)' }}>Pending: <b>{pending}</b></span>
+    <div style={{ background: 'var(--bg3)', borderRadius: 12, padding: 16, marginBottom: 12, border: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Mould PM Checksheet</span>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--bg4)', color: 'var(--text2)', border: '1px solid var(--border)' }}>
+            Total: <b style={{ color: 'var(--text)' }}>{total}</b>
+          </span>
+          <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(16,185,129,0.10)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+            ✓ {completed} done
+          </span>
+          <span style={{
+            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+            background: pending > 0 ? 'rgba(239,68,68,0.10)' : 'var(--bg4)',
+            color: pending > 0 ? '#ef4444' : 'var(--text3)',
+            border: `1px solid ${pending > 0 ? 'rgba(239,68,68,0.25)' : 'var(--border)'}`,
+          }}>
+            {pending} pending
+          </span>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
-        {fields.map(([label, value]) => (
-          <div key={label}>
-            <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 3 }}>{label}</div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{value}</div>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 8 }}>
+        {fields.map(([label, value]) => <PlanInfoField key={label} label={label} value={value}/>)}
       </div>
     </div>
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   CREDENTIALS BAR
+══════════════════════════════════════════════════════════════════════════════ */
 function CredentialsBar({ credentials, setCredentials, accessRole }) {
-  const set = field => e => setCredentials(prev => ({ ...prev, [field]: e.target.value }));
+  const set        = field => e => setCredentials(prev => ({ ...prev, [field]: e.target.value }));
   const isAdmin    = accessRole === 'admin';
   const isChecker  = accessRole === 'checker'  || isAdmin;
   const isApprover = accessRole === 'approver' || isAdmin;
-
   return (
     <div style={{ display: 'flex', gap: 12, marginTop: 22, marginBottom: 14, flexWrap: 'wrap' }}>
       <CredField label="Prepared By" value={credentials.prepared} onChange={set('prepared')} disabled={false}/>
@@ -982,68 +1088,27 @@ function CredentialsBar({ credentials, setCredentials, accessRole }) {
     </div>
   );
 }
-
 function CredField({ label, value, onChange, disabled }) {
   return (
     <div style={{ flex: 1, minWidth: 180 }}>
       <label style={labelStyle}>{label}</label>
-      <input value={value} onChange={onChange} disabled={disabled} placeholder={label} style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }}/>
+      <input value={value} onChange={onChange} disabled={disabled} placeholder={label}
+        style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }}
+      />
     </div>
   );
 }
 
-function WorkflowActions({ accessRole, canComplete, saving, completing, onSendToChecking, onSendToApproval, onComplete, onBack }) {
-  const isAdmin    = accessRole === 'admin';
-  const isChecker  = accessRole === 'checker'  || isAdmin;
-  const isApprover = accessRole === 'approver' || isAdmin;
-  const isPreparer = accessRole === 'preparer' || isAdmin;
-
-  return (
-    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-      {isPreparer && (
-        <button onClick={onSendToChecking} disabled={saving} style={{ ...wfBtnStyle, background: '#ff9800' }}>
-          <S size={13} d={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>}/>
-          {saving ? 'Sending…' : 'Send to Checking'}
-        </button>
-      )}
-      {isChecker && (
-        <button onClick={onSendToApproval} disabled={saving} style={{ ...wfBtnStyle, background: '#28a745' }}>
-          <S size={13} d={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>}/>
-          {saving ? 'Sending…' : 'Send to Approval'}
-        </button>
-      )}
-      {isApprover && (
-        <button
-          onClick={onComplete}
-          disabled={!canComplete || completing}
-          title={!canComplete ? 'All items must be filled before completing' : 'Complete and close the plan'}
-          style={{
-            ...wfBtnStyle,
-            background: canComplete ? '#007bff' : '#6c757d',
-            cursor: canComplete ? 'pointer' : 'not-allowed',
-            opacity: canComplete ? 1 : 0.65,
-          }}
-        >
-          <S size={13} d={<><polygon points="19 20 9 20 9 13 19 13 19 20"/><polygon points="15 9 5 9 5 2 15 2 15 9"/><path d="M19 13V9h-4"/><path d="M9 11V7H5"/></>}/>
-          {completing ? 'Completing…' : 'Complete'}
-        </button>
-      )}
-      <button onClick={onBack} style={{ ...wfBtnStyle, background: '#9e9e9e' }}>
-        <S size={13} d={<><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>}/>
-        Back
-      </button>
-    </div>
-  );
-}
-
+/* ══════════════════════════════════════════════════════════════════════════════
+   LOADING ROWS
+══════════════════════════════════════════════════════════════════════════════ */
 function LoadingRows() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {[...Array(6)].map((_, i) => (
         <div key={i} style={{
           height: 54, borderRadius: 9, background: 'var(--bg3)', border: '1px solid var(--border)',
-          animation: 'pulse 1.4s ease-in-out infinite',
-          opacity: 1 - i * 0.1,
+          animation: 'pulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.1,
         }}/>
       ))}
       <style>{`@keyframes pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }`}</style>
@@ -1091,7 +1156,7 @@ function SearchableSelect({ options, value, onChange, placeholder = 'Select...',
   return (
     <div ref={wrapRef} style={{ position: 'relative', width: '100%' }}>
       <div ref={triggerRef} onClick={handleToggle} style={{
-        padding: '6px 10px', borderRadius: 8,
+        padding: '6px 10px', borderRadius: 8, height: 34,
         border: `1px solid ${open ? 'var(--accent)' : error ? 'var(--red)' : 'var(--border)'}`,
         background: disabled ? 'var(--bg3)' : 'var(--surface)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1144,14 +1209,14 @@ function SearchableSelect({ options, value, onChange, placeholder = 'Select...',
           <div style={{ maxHeight: maxItems * 40, overflowY: 'auto' }}>
             {filtered.length === 0
               ? <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--text3)', textAlign: 'center' }}>No results for "{search}"</div>
-              : filtered.map((opt, idx) => {
+              : filtered.map((opt, i) => {
                   const isSel = String(opt.value) === String(value);
                   return (
                     <div key={opt.value} onClick={() => handleSelect(opt)} style={{
                       padding: '9px 12px', fontSize: 13, cursor: 'pointer',
                       color: isSel ? 'var(--accent)' : 'var(--text)',
                       background: isSel ? 'var(--accent-glow)' : 'transparent',
-                      borderBottom: idx < filtered.length - 1 ? '1px solid var(--border)' : 'none',
+                      borderBottom: i < filtered.length - 1 ? '1px solid var(--border)' : 'none',
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       transition: 'background var(--trans)',
                     }}
@@ -1189,34 +1254,7 @@ const inputStyle = {
   outline: 'none', fontFamily: 'inherit', transition: 'border-color var(--trans)',
   boxSizing: 'border-box',
 };
-const wfBtnStyle = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-  padding: '8px 18px', fontSize: 13, fontWeight: 600, color: '#fff',
-  border: 'none', borderRadius: 12, cursor: 'pointer',
-  transition: 'background-color 0.3s ease', outline: 'none',
-};
 const colHeaderStyle = {
   fontSize: 10, fontWeight: 700, color: 'var(--text3)',
   textTransform: 'uppercase', letterSpacing: '0.6px',
 };
-const specLabelStyle = {
-  fontSize: 10, fontWeight: 700, color: 'var(--text3)',
-  textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4,
-};
-const specValueStyle = {
-  fontSize: 13, fontWeight: 500, color: 'var(--text)', lineHeight: 1.4,
-};
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   MOCK DATA
-══════════════════════════════════════════════════════════════════════════════ */
-const MOCK_SPECS = [
-  { id: 1, area: 'Cavity Surface',   point: 'Surface finish check',      method: 'Visual Inspection', condition: 'No scratches / burrs',          specImage: null },
-  { id: 2, area: 'Ejector System',   point: 'Ejector pin movement',      method: 'Manual Push',       condition: 'Smooth, no resistance',          specImage: null },
-  { id: 3, area: 'Cooling Circuit',  point: 'Water flow check',          method: 'Flow Meter',        condition: '> 5 L/min per circuit',          specImage: null },
-  { id: 4, area: 'Parting Line',     point: 'Flash gap check',           method: 'Feeler Gauge',      condition: '< 0.05 mm gap',                  specImage: null },
-  { id: 5, area: 'Runner System',    point: 'Runner condition',          method: 'Visual + Measure',  condition: 'No wear, dim within ±0.1 mm',    specImage: null },
-  { id: 6, area: 'Mould Body',       point: 'Bolt torque check',         method: 'Torque Wrench',     condition: 'Per spec sheet torque values',    specImage: null },
-  { id: 7, area: 'Hot Runner',       point: 'Heater resistance check',   method: 'Multimeter',        condition: '> 40 Ω per zone minimum',        specImage: null },
-  { id: 8, area: 'Venting',          point: 'Vent groove depth',         method: 'Depth Gauge',       condition: '0.01–0.03 mm depth required',    specImage: null },
-];

@@ -22,7 +22,7 @@ const mapChecksheetDetails = (res) => {
 
   return list.map(item => ({
     id: item.id,
-
+ transId:  item.transId, 
     area: item.checkArea,
     point: item.checkPoint,
     method: item.checkMethod,
@@ -83,6 +83,41 @@ export const checksheetService = {
   }
 };
 
+// ── UPDATE CHECKSHEET (WITH IMAGE UPLOAD) ───────────────────
+export const updateChecksheet = async (payload) => {
+  const fd = new FormData();
+
+  fd.append('TransId', payload.transId);
+  fd.append('CurrentStatus', payload.statusText);
+  fd.append('ActionTaken', payload.correctiveAction);
+  fd.append('Remarks', payload.remarks || '');
+
+  if (payload.beforeImgFile instanceof File) {
+    fd.append('BeforeImage', payload.beforeImgFile);
+  }
+
+  if (payload.afterImgFile instanceof File) {
+    fd.append('AfterImage', payload.afterImgFile);
+  }
+
+  // ✅ FIX HERE
+  return mouldEndpoints.updateCheckSheet(fd);
+};
+
+// ── COMPLETE CHECKSHEET ─────────────────────────────────────
+export const completeChecksheet = async (payload) => {
+  const body = {
+    reportNo: payload.reportNo,   // ✅ send transId directly
+    preparedBy: payload.preparedBy || '',
+    checkedBy: payload.checkedBy || '',
+    approvedBy: payload.approvedBy || '',
+    createdBy: payload.createdBy || 3,
+  };
+
+  console.log('Complete Payload:', body);
+
+  return await mouldEndpoints.completeCheckSheet(body);
+};
 
 
 // ── HELPER ──────────────────────────────────────────────────

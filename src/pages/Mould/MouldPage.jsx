@@ -323,7 +323,7 @@ const openEdit = (m) => {
           </FormField>
 
           {/* ── PM Frequency Dropdown ── */}
-          <FormField label="PM Frequency (Days)" error={errors.pmDaysOption?.message}>
+          {/* <FormField label="PM Frequency (Days)" error={errors.pmDaysOption?.message}>
             <SearchableSelect
               options={FREQ_OPTIONS}
               value={watch('pmDaysOption') ?? ''}
@@ -331,7 +331,7 @@ const openEdit = (m) => {
               placeholder="Select PM frequency..."
             />
             <input type="hidden" {...register('pmDaysOption')} />
-          </FormField>
+          </FormField> */}
 
           <FormField label="PM Freq (Days)" required error={errors.pmDays?.message}>
             <input {...register('pmDays', { required: 'Required' })} type="number" placeholder="30" style={activeInputStyle}/>

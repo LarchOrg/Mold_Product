@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/store/uiStore';
-import { getChecksheetList, saveChecksheet ,checksheetService} from '@/services/checksheet';
+import { getChecksheetList, saveChecksheet ,checksheetService,updateChecksheet,completeChecksheet  } from '@/services/checksheet';
 
 // ── QUERY KEYS ─────────────────────────────────────────────
 const KEYS = {
@@ -110,3 +110,112 @@ export const useChecksheetDetails = () => {
     }
   });
 };
+
+// ── UPDATE CHECKSHEET ───────────────────────────────────────
+export function useUpdateChecksheet() {
+  const qc = useQueryClient();
+  const { showToast, removeToast } = useUIStore();
+  let updatingToastId = null;
+
+  return useMutation({
+    mutationFn: async (payload) => {
+      const res = await updateChecksheet(payload);
+
+      // handle API-level failure
+      if (!res?.success) {
+        throw new Error(res?.message || 'Update failed.');
+      }
+
+      return res;
+    },
+
+    onMutate: () => {
+      updatingToastId = showToast({
+        type: 'info',
+        title: 'Updating...',
+        message: 'Checksheet is being updated.',
+        autoClose: false,
+      });
+    },
+
+    onSuccess: (data) => {
+      if (updatingToastId) removeToast(updatingToastId);
+
+      // 🔥 refresh list after update
+      // qc.invalidateQueries(KEYS.all);
+      qc.invalidateQueries({ queryKey: KEYS.all });
+
+      showToast({
+        type: 'success',
+        title: 'Updated',
+        message: data?.message || 'Checksheet updated successfully.',
+      });
+    },
+
+    onError: (error) => {
+      if (updatingToastId) removeToast(updatingToastId);
+
+      console.error(error);
+
+      showToast({
+        type: 'error',
+        title: 'Failed',
+        message: error?.message || 'Update failed.',
+      });
+    },
+  });
+}
+
+// ── COMPLETE CHECKSHEET ─────────────────────────────────────
+export function useCompleteChecksheet() {
+  const qc = useQueryClient();
+  const { showToast, removeToast } = useUIStore();
+  let completingToastId = null;
+
+  return useMutation({
+    mutationFn: async (payload) => {
+      const res = await completeChecksheet(payload);
+
+      // 🔥 handle API-level failure
+      if (!res?.success) {
+        throw new Error(res?.message || 'Complete failed.');
+      }
+
+      return res;
+    },
+
+    onMutate: () => {
+      completingToastId = showToast({
+        type: 'info',
+        title: 'Completing...',
+        message: 'Closing checksheet...',
+        autoClose: false,
+      });
+    },
+
+    onSuccess: (data) => {
+      if (completingToastId) removeToast(completingToastId);
+
+      // ✅ refresh list after complete
+      qc.invalidateQueries({ queryKey: KEYS.all });
+
+      showToast({
+        type: 'success',
+        title: 'Completed',
+        message: data?.message || 'Checksheet completed successfully.',
+      });
+    },
+
+    onError: (error) => {
+      if (completingToastId) removeToast(completingToastId);
+
+      console.error(error);
+
+      showToast({
+        type: 'error',
+        title: 'Failed',
+        message: error?.message || 'Complete failed.',
+      });
+    },
+  });
+}

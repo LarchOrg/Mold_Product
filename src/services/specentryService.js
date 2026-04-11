@@ -122,6 +122,11 @@ export const getSpecDropdowns = async () => {
       label: i.reqCondition,
       value: i.id,
     })),
+    currentStatus: res.currentSts.map(i => ({
+      label: i.currentStatus,
+      value: i.id,
+      type: i.type,
+    })),
   };
 };
 

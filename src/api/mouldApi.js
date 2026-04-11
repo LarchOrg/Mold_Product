@@ -38,11 +38,21 @@ getChecksheet: () =>
   createCheckSheet: (payload) => mouldApi.post('/api/Mold/CreateCheckSheet', payload).then(r => r.data),
   getChecksheetDetails: (id) =>
   mouldApi.get(`/api/Mold/CheckSheetDetails/${id}`).then(r => r.data),
+updateCheckSheet: (formData) =>
+  mouldApi.put('/api/Mold/UpdateCheckSheet', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },  // ← ADD THIS
+  }).then(r => r.data),
+  completeCheckSheet: (payload) =>
+  mouldApi.put('/api/Mold/UpdateCheckSheetEntry', payload)
+    .then(r => r.data),
   
 
 
   // ── Reports ───────────────────────────────────────────────────────────────
   getLifeReport: (params)  => mouldApi.get('/api/reports/life', { params }).then(r => r.data),
-  getPMHistory:  (params)  => mouldApi.get('/api/reports/pm-history', { params }).then(r => r.data),
+getPMHistory: (fromDate, toDate) =>
+  mouldApi
+    .get(`/api/Mold/PMReport/${fromDate},${toDate}`)
+    .then(r => r.data),
   getDashboard:  ()        => mouldApi.get('/api/reports/dashboard').then(r => r.data),
 };
