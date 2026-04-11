@@ -7,11 +7,11 @@ const KEYS = {
   pmReport: (fromDate, toDate) => ['pmReport', fromDate, toDate],
 };
 
-export function usePMHistory(fromDate, toDate, enabled = false) {
+export function usePMHistory(fromDate, toDate) {
   return useQuery({
     queryKey: KEYS.pmReport(fromDate, toDate),
     queryFn: () => getPMHistory(fromDate, toDate),
-    enabled: enabled && !!fromDate && !!toDate,  // ← only runs when Search is clicked
+    enabled: !!fromDate && !!toDate,  // fires immediately on mount
     keepPreviousData: true,
     refetchOnWindowFocus: false,
   });
