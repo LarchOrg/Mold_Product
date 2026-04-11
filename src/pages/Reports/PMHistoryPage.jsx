@@ -18,11 +18,12 @@ const S = ({ d, size = 13 }) => (
 function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
-function monthAgoStr() {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return d.toISOString().split('T')[0];
-}
+// function monthAgoStr() {
+//   const d = new Date();
+//   d.setMonth(d.getMonth() - 1);
+//   return d.toISOString().split('T')[0];
+// }
+
 
 // ── mock summary data — replace with API: pr_fetch_lerp_Mould_CheckSheet_Summary ──
 const MOCK_SUMMARY = [
@@ -73,12 +74,12 @@ const detailColumns = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MouldCheckSheetSummaryPage() {
-  const [fromDate,     setFromDate]     = useState(monthAgoStr());
-  const [toDate,       setToDate]       = useState(todayStr());
-  const [searched, setSearched] = useState(false);
+const [fromDate, setFromDate] = useState(todayStr());
+const [toDate,   setToDate]   = useState(todayStr());
+  // const [searched, setSearched] = useState(false);
   // const [summaryRows,  setSummaryRows]  = useState(MOCK_SUMMARY);
- const { data: summaryRows = [], isLoading, refetch } =
-  usePMHistory(fromDate, toDate, searched);
+const { data: summaryRows = [], isLoading, refetch } =
+  usePMHistory(fromDate, toDate);
 
   // print-icon modal state
   const [printRec,     setPrintRec]     = useState(null);   // selected summary row
@@ -93,17 +94,11 @@ export default function MouldCheckSheetSummaryPage() {
 
   // ── search ────────────────────────────────────────────────────────────────
 function handleSearch() {
-  if (searched) {
-    // If already searched with same dates, force a refetch
-    refetch();
-  } else {
-    setSearched(true);  // First click enables the query
-  }
+  refetch();
 }
 const handleReset = () => {
-  setFromDate(monthAgoStr());
+  setFromDate(todayStr());  // was monthAgoStr()
   setToDate(todayStr());
-  setSearched(false);  // ← disable query, clear results
 };
   // ── print icon → open detail modal + auto-trigger PDF confirm ────────────
   function handlePrintClick(row) {
