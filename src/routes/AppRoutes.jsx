@@ -9,6 +9,7 @@ import MouldPage       from '@/pages/Mould/MouldPage';
 import PMPlanPage      from '@/pages/PMPlan/PMPlanPage';
 import SpecEntryPage   from '@/pages/SpecEntry/SpecEntryPage';
 import ChecksheetPage  from '@/pages/Checksheet/ChecksheetPage';
+import DailyChecksheetPage  from '@/pages/Checksheet/DailyChecksheetPage';
 import LifeReportPage  from '@/pages/Reports/LifeReportPage';
 import MouldHistoryPage from '@/pages/Reports/MouldHistoryPage';
 import PMHistoryPage   from '@/pages/Reports/PMHistoryPage';
@@ -53,6 +54,7 @@ export default function AppRoutes() {
         <Route path="pm-plans"   element={<PMPlanPage />} />
         <Route path="spec-entry" element={<SpecEntryPage />} />
         <Route path="checksheet" element={<ChecksheetPage />} />
+        <Route path="daily-checksheet" element={<DailyChecksheetPage />} />
         <Route path="reports/life"       element={<LifeReportPage />} />
         <Route path="reports/pm-history" element={<PMHistoryPage />} />
         <Route path="reports/mould-history" element={<MouldHistoryPage />} />
