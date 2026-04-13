@@ -45,6 +45,22 @@ updateCheckSheet: (formData) =>
   completeCheckSheet: (payload) =>
   mouldApi.put('/api/Mold/UpdateCheckSheetEntry', payload)
     .then(r => r.data),
+
+
+      // ── Daily Checksheet ────────────────────────────────────────────────────────────
+getDailyChecksheet: () =>
+  mouldApi.get('/api/Mold/DailyCheckSheet').then(r => r.data),
+  saveChecksheet: (payload) => mouldApi.post('/api/checksheets', payload).then(r => r.data),
+  createCheckSheet: (payload) => mouldApi.post('/api/Mold/CreateCheckSheet', payload).then(r => r.data),
+  getChecksheetDetails: (id) =>
+  mouldApi.get(`/api/Mold/CheckSheetDetails/${id}`).then(r => r.data),
+updateCheckSheet: (formData) =>
+  mouldApi.put('/api/Mold/UpdateCheckSheet', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },  // ← ADD THIS
+  }).then(r => r.data),
+  completeCheckSheet: (payload) =>
+  mouldApi.put('/api/Mold/UpdateCheckSheetEntry', payload)
+    .then(r => r.data),
   
 
 
