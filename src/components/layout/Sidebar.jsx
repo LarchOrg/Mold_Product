@@ -31,11 +31,15 @@ const NAV = [
     { to: '/checksheet',      icon: 'Check',     label: 'PM Checksheet Entry' },
     { to: '/daily-checksheet', icon: 'Check', label: 'Daily Checksheet Entry' },
   ]},
+   { section: 'Breakdown', items: [
+    { to: '/mold-breakdown',        icon: 'Calendar',  label: 'Mold Breakdown', badge: '3' },
+
+  ]},
   { section: 'Reports',      items: [
     { to: '/reports/life',        icon: 'BarChart', label: 'Mold Life Report' },
     { to: '/reports/pm-history',  icon: 'Clock',    label: 'PM Report' },
      { to: '/reports/mould-history', icon: 'FileText', label: 'Mold History' }, 
-     { to: '/reports/dailyreport', icon: 'FileText', label: 'Daily Report' }, 
+     { to: '/reports/daily', icon: 'FileText', label: 'Daily Report' }, 
   ]},
   { section: 'System',       items: [
     { to: '/users',           icon: 'Users',    label: 'Users' },
